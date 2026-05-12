@@ -307,37 +307,97 @@
       C.register(10, 10);
       assertEqual(C.getCount(), 3);
     });
+    test('register noIncrement leaves count alone', function () {
+      C.reset();
+      C.register(0, 0);
+      C.register(0, 0);
+      const before = C.getCount();
+      C.register(0, 0, { noIncrement: true });
+      C.register(0, 0, { noIncrement: true });
+      assertEqual(C.getCount(), before);
+    });
     test('milestone fires once per run', function () {
       C.reset();
       for (let i = 0; i < 10; i++) C.register(10, 10);
       assert(C._firedThisRun.has('fireworks'), 'fireworks should fire at 10');
-      // Continue past 10 — should not re-fire fireworks
       C.register(10, 10);
-      // Still in run, fireworks should still be in set
       assert(C._firedThisRun.has('fireworks'));
     });
     test('milestone set clears on reset', function () {
       C.reset();
       assert(!C._firedThisRun.has('fireworks'));
     });
-    test('combo resets after timeout', function (done) {
+    test('combo resets after timeout', function () {
       withSettings({ comboTimeout: 50 }, function () {
         C.reset();
         C.register(1, 1);
         C.register(1, 1);
         assertEqual(C.getCount(), 2);
-        // wait synchronously by busy loop because we want tick() to reset
         const until = performance.now() + 80;
         while (performance.now() < until) { /* spin */ }
         C.tick();
         assertEqual(C.getCount(), 0);
       });
     });
-    test('all 7 milestones defined', function () {
+    test('all 7 milestone slots defined', function () {
       const ms = C._getMilestones();
       assertEqual(ms.length, 7);
       assertEqual(ms[0].at, 10);
       assertEqual(ms[6].at, 1000);
+    });
+    test('milestone slots can be reassigned to other effects', function () {
+      withSettings({
+        milestones: {
+          fireworks: { enabled: true, at: 10, effect: 'tornado' },
+          galaxy:    { enabled: true, at: 20, effect: 'galaxy' },
+          tornado:   { enabled: true, at: 50, effect: 'tornado' },
+          supernova: { enabled: true, at: 100, effect: 'supernova' },
+          blackhole: { enabled: true, at: 200, effect: 'blackhole' },
+          bigbang:   { enabled: true, at: 500, effect: 'bigbang' },
+          universe:  { enabled: true, at: 1000, effect: 'universe' }
+        }
+      }, function () {
+        const ms = C._getMilestones();
+        const fw = ms.find(function (m) { return m.name === 'fireworks'; });
+        assertEqual(fw.effect, 'tornado');
+      });
+    });
+    test('disabled milestones do not fire', function () {
+      withSettings({
+        milestones: {
+          fireworks: { enabled: false, at: 10, effect: 'fireworks' },
+          galaxy:    { enabled: true,  at: 20, effect: 'galaxy' },
+          tornado:   { enabled: true,  at: 50, effect: 'tornado' },
+          supernova: { enabled: true,  at: 100, effect: 'supernova' },
+          blackhole: { enabled: true,  at: 200, effect: 'blackhole' },
+          bigbang:   { enabled: true,  at: 500, effect: 'bigbang' },
+          universe:  { enabled: true,  at: 1000, effect: 'universe' }
+        }
+      }, function () {
+        C.reset();
+        for (let i = 0; i < 10; i++) C.register(10, 10);
+        assert(!C._firedThisRun.has('fireworks'), 'disabled fireworks should not fire');
+      });
+    });
+    test('reassigned threshold fires at new value', function () {
+      withSettings({
+        milestones: {
+          fireworks: { enabled: true, at: 3, effect: 'fireworks' },
+          galaxy:    { enabled: true, at: 20, effect: 'galaxy' },
+          tornado:   { enabled: true, at: 50, effect: 'tornado' },
+          supernova: { enabled: true, at: 100, effect: 'supernova' },
+          blackhole: { enabled: true, at: 200, effect: 'blackhole' },
+          bigbang:   { enabled: true, at: 500, effect: 'bigbang' },
+          universe:  { enabled: true, at: 1000, effect: 'universe' }
+        }
+      }, function () {
+        C.reset();
+        C.register(0, 0);
+        C.register(0, 0);
+        assert(!C._firedThisRun.has('fireworks'));
+        C.register(0, 0);
+        assert(C._firedThisRun.has('fireworks'), 'should fire at custom threshold 3');
+      });
     });
   });
 
@@ -352,13 +412,10 @@
     });
     test('pool reuses dead slots', function () {
       PS.clear();
-      const cfg = PS._config;
-      // Spawn slightly more than initial pool to test growth + reuse
       withSettings({ particleCount: 100 }, function () {
         PS.spawn(100, 100, { count: 50 });
       });
       const before = PS._pool.length;
-      // Kill them all
       for (let i = 0; i < PS._pool.length; i++) PS._pool[i].alive = false;
       withSettings({ particleCount: 100 }, function () {
         PS.spawn(100, 100, { count: 50 });
@@ -379,7 +436,7 @@
       PS.clear();
       PS.spawn(100, 100, { count: 5, life: 1 });
       assertEqual(PS.getAliveCount(), 5);
-      PS.update(100); // dt=100ms, life=1 -> all die
+      PS.update(100);
       assertEqual(PS.getAliveCount(), 0);
     });
     test('throttle halves spawn count', function () {
@@ -391,6 +448,107 @@
       const n = PS.getAliveCount();
       PM.perf._forceThrottle(false);
       assert(n <= 11, 'throttled count should be ~half (got ' + n + ')');
+    });
+    test('deleteMode spawns imploding red particles', function () {
+      PS.clear();
+      withSettings({ particleCount: 10 }, function () {
+        PS.spawn(200, 200, { deleteMode: true });
+      });
+      const alive = PS._pool.filter(function (p) { return p.alive; });
+      assert(alive.length > 0, 'should spawn delete particles');
+      const allImplode = alive.every(function (p) { return p._implode === true; });
+      assert(allImplode, 'all delete particles should have _implode=true');
+      const allRed = alive.every(function (p) { return PS._DELETE_PALETTE.indexOf(p.color) >= 0; });
+      assert(allRed, 'all delete particles should use DELETE_PALETTE');
+    });
+    test('deleteMode particles move inward toward origin', function () {
+      PS.clear();
+      PS.spawn(500, 500, { deleteMode: true });
+      const alive = PS._pool.filter(function (p) { return p.alive; });
+      // Each particle's velocity should point toward (500, 500): vx*(x-500) + vy*(y-500) < 0
+      const inwardCount = alive.filter(function (p) {
+        return p.vx * (p.x - 500) + p.vy * (p.y - 500) < 0;
+      }).length;
+      assertEqual(inwardCount, alive.length);
+    });
+    test('spawn offset shifts position for userTriggered', function () {
+      PS.clear();
+      withSettings({ particleCount: 6, spawnOffsetX: 20, spawnOffsetY: -10, spawnJitter: 0 }, function () {
+        PS.spawn(100, 100, { count: 6, userTriggered: true });
+      });
+      const alive = PS._pool.filter(function (p) { return p.alive; });
+      assert(alive.length > 0);
+      assert(alive.every(function (p) { return p.x === 120; }), 'x should be 100+20');
+      assert(alive.every(function (p) { return p.y === 90; }),  'y should be 100-10');
+    });
+    test('spawn offset NOT applied to milestone (non-user) spawns', function () {
+      PS.clear();
+      withSettings({ spawnOffsetX: 50, spawnOffsetY: 50 }, function () {
+        PS.spawn(100, 100, { count: 4 });
+      });
+      const alive = PS._pool.filter(function (p) { return p.alive; });
+      assert(alive.every(function (p) { return p.x === 100 && p.y === 100; }));
+    });
+    test('shape filter excludes disabled shapes', function () {
+      PS.clear();
+      withSettings({
+        particleCount: 30,
+        enabledShapes: { circle: true, square: false, triangle: false, star: false, diamond: false }
+      }, function () {
+        PS.spawn(100, 100, { count: 30, userTriggered: true });
+      });
+      const alive = PS._pool.filter(function (p) { return p.alive; });
+      assert(alive.every(function (p) { return p.shape === 'circle'; }), 'only circles allowed');
+    });
+    test('generateAngle radial covers full circle', function () {
+      let min = Infinity, max = -Infinity;
+      for (let i = 0; i < 200; i++) {
+        const a = PS._generateAngle('radial');
+        if (a < min) min = a;
+        if (a > max) max = a;
+      }
+      assert(max - min > Math.PI, 'radial should span > π');
+    });
+    test('generateAngle up trends upward', function () {
+      let upCount = 0;
+      for (let i = 0; i < 200; i++) {
+        const a = PS._generateAngle('up');
+        if (Math.sin(a) < 0) upCount++;
+      }
+      assert(upCount > 180, 'most "up" particles should have negative y velocity (got ' + upCount + ')');
+    });
+    test('generateAngle coneUp is narrower than up', function () {
+      const samples = function (dir) {
+        let lo = Infinity, hi = -Infinity;
+        for (let i = 0; i < 300; i++) {
+          const a = PS._generateAngle(dir);
+          if (a < lo) lo = a; if (a > hi) hi = a;
+        }
+        return hi - lo;
+      };
+      assert(samples('coneUp') < samples('up'), 'coneUp range should be narrower than up');
+    });
+    test('particle life multiplier scales maxLife', function () {
+      PS.clear();
+      withSettings({ particleCount: 5, particleLifeMul: 2.0 }, function () {
+        PS.spawn(100, 100, { count: 5, life: 1000, userTriggered: true });
+      });
+      const alive = PS._pool.filter(function (p) { return p.alive; });
+      const avg = alive.reduce(function (s, p) { return s + p.maxLife; }, 0) / alive.length;
+      assert(avg > 1200, 'lifeMul=2 should ~2× maxLife (avg ' + avg + ')');
+    });
+    test('gravity setting overrides default', function () {
+      PS.clear();
+      PS.spawn(100, 100, { count: 3, life: 5000, speed: 0 });
+      const before = PS._pool.filter(function (p) { return p.alive; }).map(function (p) { return p.vy; });
+      withSettings({ gravity: 1.0 }, function () {
+        PS.update(100);
+      });
+      const after = PS._pool.filter(function (p) { return p.alive; }).map(function (p) { return p.vy; });
+      assert(after.length === before.length);
+      for (let i = 0; i < after.length; i++) {
+        assert(after[i] > before[i] + 3, 'high gravity should pull vy down significantly');
+      }
     });
   });
 
@@ -473,7 +631,8 @@
     test('keyFreq mapping is correct', function () {
       assertEqual(S._keyFreq('Enter'), 880);
       assertEqual(S._keyFreq(' '), 220);
-      assertEqual(S._keyFreq('Backspace'), 110);
+      assertEqual(S._keyFreq('Backspace'), 90);
+      assertEqual(S._keyFreq('Delete'), 90);
       assertEqual(S._keyFreq('Tab'), 440);
       assertEqual(S._keyFreq('A'), 220);
       assertEqual(S._keyFreq('C'), 261.63);
@@ -483,7 +642,14 @@
       assertEqual(S._keyWaveform('Enter'), 'sine');
       assertEqual(S._keyWaveform(' '), 'square');
       assertEqual(S._keyWaveform('Backspace'), 'sawtooth');
+      assertEqual(S._keyWaveform('Delete'), 'sawtooth');
       assertEqual(S._keyWaveform('Tab'), 'triangle');
+    });
+    test('delete waveform ignores override', function () {
+      S.setWaveformOverride('sine');
+      assertEqual(S._keyWaveform('Backspace'), 'sawtooth');
+      assertEqual(S._keyWaveform('Delete'), 'sawtooth');
+      S.setWaveformOverride('auto');
     });
     test('setWaveformOverride respected for non-special keys', function () {
       S.setWaveformOverride('sine');
@@ -494,6 +660,41 @@
       S.setPack('arcade');
       assertEqual(S._getPack(), 'arcade');
       S.setPack('default');
+    });
+  });
+
+  describe('custom-palette', function () {
+    const P = PM.presets;
+    test('isValidHex accepts 6-digit hex', function () {
+      assert(P._isValidHex('#ff0000'));
+      assert(P._isValidHex('#FF00aa'));
+      assert(!P._isValidHex('red'));
+      assert(!P._isValidHex('#ff0'));
+      assert(!P._isValidHex('#ggg000'));
+    });
+    test('custom scheme returns user palette', function () {
+      withSettings({ customColors: ['#112233', '#445566'] }, function () {
+        const c = P.getColorScheme('custom');
+        assertEqual(c.length, 2);
+        assertEqual(c[0], '#112233');
+      });
+    });
+    test('custom scheme falls back to rainbow when empty', function () {
+      withSettings({ customColors: [] }, function () {
+        const c = P.getColorScheme('custom');
+        assertEqual(c.length, 7);
+      });
+    });
+    test('custom scheme filters invalid hex', function () {
+      withSettings({ customColors: ['#ff0000', 'red', '#ggg', '#00ff00'] }, function () {
+        const c = P.getColorScheme('custom');
+        assertEqual(c.length, 2);
+        assertEqual(c[0], '#ff0000');
+        assertEqual(c[1], '#00ff00');
+      });
+    });
+    test('LIST includes custom', function () {
+      assert(P.LIST.schemes.indexOf('custom') >= 0);
     });
   });
 
@@ -515,8 +716,13 @@
 
   describe('main', function () {
     const M = PM.main;
-    test('DEFAULTS contains required keys', function () {
-      const keys = ['enabled','soundEnabled','preset','colorScheme','soundPack','shakeIntensity','particleCount','volume','bitcrushAmount','waveform','reducedMotion','highContrast','useWebGL','enableML','comboTimeout'];
+    test('DEFAULTS contains all v1.1 keys', function () {
+      const keys = ['enabled','soundEnabled','preset','colorScheme','customColors','soundPack',
+        'shakeIntensity','particleCount','volume','bitcrushAmount','waveform',
+        'reducedMotion','highContrast','useWebGL','enableML','comboTimeout',
+        'spawnOffsetX','spawnOffsetY','spawnJitter','spawnDirection','particleLifeMul',
+        'enabledShapes','gravity','friction','hudPosition','hudScale','hudOpacity',
+        'disabledDomains','milestones'];
       keys.forEach(function (k) { assert(k in M.DEFAULTS, 'missing key: ' + k); });
     });
     test('isEditable detects input', function () {
@@ -533,9 +739,66 @@
       d.setAttribute('contenteditable', 'true');
       assertEqual(M._isEditable(d), true);
     });
+    test('isDeleteKey identifies Backspace and Delete', function () {
+      assert(M._isDeleteKey({ key: 'Backspace' }));
+      assert(M._isDeleteKey({ key: 'Delete' }));
+      assert(!M._isDeleteKey({ key: 'a' }));
+      assert(!M._isDeleteKey({ key: 'Enter' }));
+    });
+    test('isDomainDisabled matches exact and subdomain', function () {
+      const host = location.hostname.toLowerCase();
+      // Empty list = not disabled
+      withSettings({ disabledDomains: [] }, function () {
+        assert(!M._isDomainDisabled());
+      });
+      // Exact match
+      withSettings({ disabledDomains: [host] }, function () {
+        assert(M._isDomainDisabled());
+      });
+      // Unrelated domain
+      withSettings({ disabledDomains: ['nope.example.com'] }, function () {
+        assert(!M._isDomainDisabled());
+      });
+    });
+    test('resolveHudPos near caret returns caret', function () {
+      withSettings({ hudPosition: 'caret' }, function () {
+        const p = M._resolveHudPos({ x: 200, y: 300 });
+        assertEqual(p.x, 200);
+        assertEqual(p.y, 300);
+      });
+    });
+    test('resolveHudPos topLeft is at origin-ish', function () {
+      withSettings({ hudPosition: 'topLeft' }, function () {
+        const p = M._resolveHudPos({ x: 999, y: 999 });
+        assert(p.x < 50);
+      });
+    });
+    test('resolveHudPos bottomRight is far from origin', function () {
+      withSettings({ hudPosition: 'bottomRight' }, function () {
+        const p = M._resolveHudPos({ x: 0, y: 0 });
+        assert(p.x > window.innerWidth / 2 - 100, 'x should be on right side');
+      });
+    });
     test('applyAccessibilityOverrides forces monochrome with high contrast', function () {
       const out = M._applyAccessibilityOverrides({ highContrast: true, colorScheme: 'rainbow' });
       assertEqual(out.colorScheme, 'monochrome');
+    });
+  });
+
+  describe('visual-effects v1.1', function () {
+    const V = PM.vfx;
+    test('HUD scale + opacity apply when present', function () {
+      withSettings({ hudScale: 2.0, hudOpacity: 0.5, reducedMotion: false }, function () {
+        V.reset();
+        V.updateHUD(10, 100, 100);
+        // Read DOM HUD element
+        const el = document.querySelector('[data-powermode-hud]');
+        assert(el != null, 'hud element exists');
+        // opacity is set as inline style
+        assertClose(parseFloat(el.style.opacity), 0.5, 0.01);
+        const fs = parseFloat(el.style.fontSize);
+        assert(fs > 30, 'scaled fontSize should be > 30 (got ' + fs + ')');
+      });
     });
   });
 

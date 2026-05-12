@@ -7,6 +7,7 @@
     soundEnabled: true,
     preset: 'default',
     colorScheme: 'rainbow',
+    customColors: ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#5ac8fa', '#007aff', '#af52de'],
     soundPack: 'default',
     shakeIntensity: 5,
     particleCount: 12,
@@ -17,7 +18,28 @@
     highContrast: false,
     useWebGL: false,
     enableML: false,
-    comboTimeout: 1000
+    comboTimeout: 1000,
+    spawnOffsetX: 0,
+    spawnOffsetY: 0,
+    spawnJitter: 0,
+    spawnDirection: 'radial',
+    particleLifeMul: 1.0,
+    enabledShapes: { circle: true, square: true, triangle: true, star: true, diamond: true },
+    gravity: 0.15,
+    friction: 0.985,
+    hudPosition: 'caret',
+    hudScale: 1.0,
+    hudOpacity: 1.0,
+    disabledDomains: [],
+    milestones: {
+      fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
+      galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
+      tornado:   { enabled: true, at: 50,   effect: 'tornado' },
+      supernova: { enabled: true, at: 100,  effect: 'supernova' },
+      blackhole: { enabled: true, at: 200,  effect: 'blackhole' },
+      bigbang:   { enabled: true, at: 500,  effect: 'bigbang' },
+      universe:  { enabled: true, at: 1000, effect: 'universe' }
+    }
   };
 
   let settings = Object.assign({}, DEFAULTS);
@@ -175,27 +197,90 @@
     return ['c', 'v', 'x', 'a', 'z', 'y', 's', 'f', 'r', 'p', 'd', 'l', 'h', 'j', 'k', 't', 'n', 'w'].indexOf(k) >= 0;
   }
 
+  function isDeleteKey(e) {
+    return e.key === 'Backspace' || e.key === 'Delete';
+  }
+
+  function currentSettings() {
+    return (window.__powerMode.main && window.__powerMode.main.getSettings && window.__powerMode.main.getSettings()) || settings;
+  }
+
+  function isDomainDisabled() {
+    const s = currentSettings();
+    const list = s.disabledDomains;
+    if (!list || !list.length) return false;
+    const host = (typeof location !== 'undefined' && location.hostname) ? location.hostname.toLowerCase() : '';
+    for (let i = 0; i < list.length; i++) {
+      const d = String(list[i] || '').toLowerCase().trim();
+      if (!d) continue;
+      if (host === d || host.endsWith('.' + d)) return true;
+    }
+    return false;
+  }
+
+  let lastMouseX = 0;
+  let lastMouseY = 0;
+  function onMouseMove(e) {
+    lastMouseX = e.clientX;
+    lastMouseY = e.clientY;
+  }
+
   function onKeydown(e) {
     if (!settings.enabled) return;
+    if (isDomainDisabled()) return;
     const target = e.target;
     if (!isEditable(target)) return;
     if (isModifierOnly(e)) return;
     if (isComboShortcut(e)) return;
 
     const pos = caretPos(target);
-    const combo = window.__powerMode.combo ? window.__powerMode.combo.register(pos.x, pos.y) : 1;
     const ml = window.__powerMode.ml;
+    const deleteMode = isDeleteKey(e);
+
+    let combo;
+    if (window.__powerMode.combo) {
+      combo = window.__powerMode.combo.register(pos.x, pos.y, { noIncrement: deleteMode });
+    } else {
+      combo = 1;
+    }
     if (ml) ml.recordKeystroke();
 
     if (window.__powerMode.particles) {
-      window.__powerMode.particles.spawn(pos.x, pos.y, { combo: combo });
+      const opts = { combo: combo, userTriggered: true };
+      if (deleteMode) opts.deleteMode = true;
+      window.__powerMode.particles.spawn(pos.x, pos.y, opts);
     }
     if (window.__powerMode.vfx) {
-      window.__powerMode.vfx.shake(2 + Math.min(combo / 8, 12));
-      window.__powerMode.vfx.updateHUD(combo, pos.x, pos.y);
+      const shakeAmount = deleteMode ? 1.5 : (2 + Math.min(combo / 8, 12));
+      window.__powerMode.vfx.shake(shakeAmount);
+      if (!deleteMode) {
+        const hudPos = resolveHudPos(pos);
+        window.__powerMode.vfx.updateHUD(combo, hudPos.x, hudPos.y);
+      }
     }
     if (settings.soundEnabled && window.__powerMode.sfx) {
       window.__powerMode.sfx.play(e.key, combo);
+    }
+  }
+
+  function resolveHudPos(caret) {
+    const s = currentSettings();
+    const pos = s.hudPosition || 'caret';
+    if (pos === 'caret') return caret;
+    if (pos === 'followCursor') return { x: lastMouseX, y: lastMouseY };
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    const margin = 16;
+    const hw = 100;
+    const hh = 60;
+    switch (pos) {
+      case 'topLeft':      return { x: margin,           y: margin + hh };
+      case 'topCenter':    return { x: w / 2 - hw,       y: margin + hh };
+      case 'topRight':     return { x: w - hw * 2 - margin, y: margin + hh };
+      case 'bottomLeft':   return { x: margin,           y: h - margin };
+      case 'bottomCenter': return { x: w / 2 - hw,       y: h - margin };
+      case 'bottomRight':  return { x: w - hw * 2 - margin, y: h - margin };
+      default:             return caret;
     }
   }
 
@@ -327,6 +412,7 @@
     if (a11y) a11y.onChange(function () { applySettings(applyAccessibilityOverrides(settings)); });
 
     document.addEventListener('keydown', onKeydown, true);
+    document.addEventListener('mousemove', onMouseMove, { passive: true });
     window.addEventListener('resize', onResize);
     ensureCanvas();
 
@@ -352,6 +438,9 @@
     DEFAULTS: DEFAULTS,
     _caretPos: caretPos,
     _isEditable: isEditable,
+    _isDeleteKey: isDeleteKey,
+    _isDomainDisabled: isDomainDisabled,
+    _resolveHudPos: resolveHudPos,
     _onKeydown: onKeydown,
     _applySettingsRaw: applySettings,
     _applyAccessibilityOverrides: applyAccessibilityOverrides

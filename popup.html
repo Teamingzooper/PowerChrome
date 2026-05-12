@@ -11,33 +11,40 @@
     <span id="fps" class="fps" title="Frames per second (active tab)">— fps</span>
   </header>
 
-  <section class="row toggles">
-    <label class="switch">
-      <input type="checkbox" id="enabled">
-      <span class="track"></span>
-      <span class="lbl">Power Mode</span>
-    </label>
-    <label class="switch">
-      <input type="checkbox" id="soundEnabled">
-      <span class="track"></span>
-      <span class="lbl">Sound</span>
-    </label>
-  </section>
+  <nav class="tabs" role="tablist">
+    <button data-tab="basics" class="active" role="tab" type="button">Basics</button>
+    <button data-tab="particles" role="tab" type="button">Particles</button>
+    <button data-tab="combo" role="tab" type="button">Combo</button>
+    <button data-tab="audio" role="tab" type="button">Audio</button>
+    <button data-tab="more" role="tab" type="button">More</button>
+  </nav>
 
-  <section>
-    <h2>Preset</h2>
-    <div class="chips" id="presetChips">
-      <button data-preset="default" type="button">Default</button>
-      <button data-preset="subtle" type="button">Subtle</button>
-      <button data-preset="intense" type="button">Intense</button>
-      <button data-preset="retro" type="button">Retro</button>
-      <button data-preset="minimal" type="button">Minimal</button>
-    </div>
-  </section>
+  <main>
+    <!-- BASICS -->
+    <section data-panel="basics" class="panel active">
+      <div class="row toggles">
+        <label class="switch">
+          <input type="checkbox" id="enabled">
+          <span class="track"></span>
+          <span class="lbl">Power Mode</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="soundEnabled">
+          <span class="track"></span>
+          <span class="lbl">Sound</span>
+        </label>
+      </div>
 
-  <section class="grid-2">
-    <div>
-      <h2>Colors</h2>
+      <h2>Preset</h2>
+      <div class="chips" id="presetChips">
+        <button data-preset="default" type="button">Default</button>
+        <button data-preset="subtle" type="button">Subtle</button>
+        <button data-preset="intense" type="button">Intense</button>
+        <button data-preset="retro" type="button">Retro</button>
+        <button data-preset="minimal" type="button">Minimal</button>
+      </div>
+
+      <h2>Color scheme</h2>
       <select id="colorScheme">
         <option value="rainbow">Rainbow</option>
         <option value="pastel">Pastel</option>
@@ -45,9 +52,18 @@
         <option value="monochrome">Monochrome</option>
         <option value="fire">Fire</option>
         <option value="ocean">Ocean</option>
+        <option value="custom">Custom (use my palette below)</option>
       </select>
-    </div>
-    <div>
+
+      <div id="customColorsSection" hidden>
+        <h2>Custom palette</h2>
+        <div id="customColorsList" class="palette"></div>
+        <div class="palette-actions">
+          <button id="addColor" type="button" class="small">+ Add color</button>
+          <span class="hint">Up to 8 hex colors. Used when scheme is "Custom".</span>
+        </div>
+      </div>
+
       <h2>Sound pack</h2>
       <select id="soundPack">
         <option value="default">Default</option>
@@ -55,79 +71,136 @@
         <option value="synth">Synth</option>
         <option value="retro">Retro</option>
       </select>
-    </div>
-  </section>
+    </section>
 
-  <section class="sliders">
-    <h2>Intensity</h2>
-    <label>
-      <span>Shake</span>
-      <input type="range" id="shakeIntensity" min="1" max="10" step="1">
-      <output id="shakeIntensityVal"></output>
-    </label>
-    <label>
-      <span>Particles</span>
-      <input type="range" id="particleCount" min="5" max="30" step="1">
-      <output id="particleCountVal"></output>
-    </label>
-    <label>
-      <span>Volume</span>
-      <input type="range" id="volume" min="0" max="100" step="1">
-      <output id="volumeVal"></output>
-    </label>
-    <label>
-      <span>Bitcrush</span>
-      <input type="range" id="bitcrushAmount" min="0" max="100" step="1">
-      <output id="bitcrushAmountVal"></output>
-    </label>
-  </section>
+    <!-- PARTICLES -->
+    <section data-panel="particles" class="panel">
+      <div class="sliders">
+        <label><span>Shake</span><input type="range" id="shakeIntensity" min="0" max="10" step="1"><output id="shakeIntensityVal"></output></label>
+        <label><span>Particles</span><input type="range" id="particleCount" min="0" max="40" step="1"><output id="particleCountVal"></output></label>
+        <label><span>Life</span><input type="range" id="particleLifeMul" min="50" max="200" step="5"><output id="particleLifeMulVal"></output></label>
+        <label><span>Gravity</span><input type="range" id="gravity" min="0" max="50" step="1"><output id="gravityVal"></output></label>
+        <label><span>Friction</span><input type="range" id="friction" min="900" max="1000" step="2"><output id="frictionVal"></output></label>
+      </div>
 
-  <section>
-    <h2>Waveform</h2>
-    <select id="waveform">
-      <option value="auto">Auto (per-key)</option>
-      <option value="sine">Sine</option>
-      <option value="square">Square</option>
-      <option value="sawtooth">Sawtooth</option>
-      <option value="triangle">Triangle</option>
-    </select>
-  </section>
+      <h2>Spawn position</h2>
+      <div class="sliders">
+        <label><span>Offset X</span><input type="range" id="spawnOffsetX" min="-50" max="50" step="1"><output id="spawnOffsetXVal"></output></label>
+        <label><span>Offset Y</span><input type="range" id="spawnOffsetY" min="-50" max="50" step="1"><output id="spawnOffsetYVal"></output></label>
+        <label><span>Jitter</span><input type="range" id="spawnJitter" min="0" max="40" step="1"><output id="spawnJitterVal"></output></label>
+      </div>
 
-  <section>
-    <h2>Accessibility</h2>
-    <div class="row toggles">
-      <label class="switch">
-        <input type="checkbox" id="reducedMotion">
-        <span class="track"></span>
-        <span class="lbl">Reduced motion</span>
-      </label>
-      <label class="switch">
-        <input type="checkbox" id="highContrast">
-        <span class="track"></span>
-        <span class="lbl">High contrast</span>
-      </label>
-    </div>
-  </section>
+      <h2>Spawn direction</h2>
+      <div class="chips" id="spawnDirectionChips">
+        <button data-direction="radial" type="button">Radial</button>
+        <button data-direction="up" type="button">Up</button>
+        <button data-direction="down" type="button">Down</button>
+        <button data-direction="coneUp" type="button">Cone↑</button>
+        <button data-direction="coneDown" type="button">Cone↓</button>
+        <button data-direction="side" type="button">Sides</button>
+      </div>
 
-  <section>
-    <h2>Advanced</h2>
-    <div class="row toggles">
-      <label class="switch">
-        <input type="checkbox" id="useWebGL">
-        <span class="track"></span>
-        <span class="lbl">WebGL renderer</span>
-      </label>
-      <label class="switch">
-        <input type="checkbox" id="enableML">
-        <span class="track"></span>
-        <span class="lbl">Personalize (learn)</span>
-      </label>
-    </div>
-  </section>
+      <h2>Enabled shapes</h2>
+      <div class="shape-toggles">
+        <label class="shape-pill"><input type="checkbox" data-shape="circle"><span>● Circle</span></label>
+        <label class="shape-pill"><input type="checkbox" data-shape="square"><span>■ Square</span></label>
+        <label class="shape-pill"><input type="checkbox" data-shape="triangle"><span>▲ Triangle</span></label>
+        <label class="shape-pill"><input type="checkbox" data-shape="star"><span>★ Star</span></label>
+        <label class="shape-pill"><input type="checkbox" data-shape="diamond"><span>◆ Diamond</span></label>
+      </div>
+    </section>
+
+    <!-- COMBO -->
+    <section data-panel="combo" class="panel">
+      <h2>HUD position</h2>
+      <select id="hudPosition">
+        <option value="caret">Near caret (default)</option>
+        <option value="topLeft">Top left</option>
+        <option value="topCenter">Top center</option>
+        <option value="topRight">Top right</option>
+        <option value="bottomLeft">Bottom left</option>
+        <option value="bottomCenter">Bottom center</option>
+        <option value="bottomRight">Bottom right</option>
+        <option value="followCursor">Follow cursor</option>
+      </select>
+
+      <div class="sliders">
+        <label><span>HUD scale</span><input type="range" id="hudScale" min="50" max="200" step="5"><output id="hudScaleVal"></output></label>
+        <label><span>HUD opacity</span><input type="range" id="hudOpacity" min="10" max="100" step="5"><output id="hudOpacityVal"></output></label>
+        <label><span>Reset (ms)</span><input type="range" id="comboTimeout" min="300" max="3000" step="50"><output id="comboTimeoutVal"></output></label>
+      </div>
+
+      <h2>Milestone effects</h2>
+      <div id="milestonesList" class="milestones"></div>
+      <div class="palette-actions">
+        <button id="resetMilestones" type="button" class="small">Reset milestones</button>
+        <span class="hint">Each row: enable · combo threshold · effect to fire.</span>
+      </div>
+    </section>
+
+    <!-- AUDIO -->
+    <section data-panel="audio" class="panel">
+      <div class="sliders">
+        <label><span>Volume</span><input type="range" id="volume" min="0" max="100" step="1"><output id="volumeVal"></output></label>
+        <label><span>Bitcrush</span><input type="range" id="bitcrushAmount" min="0" max="100" step="1"><output id="bitcrushAmountVal"></output></label>
+      </div>
+      <h2>Waveform (typing keys)</h2>
+      <select id="waveform">
+        <option value="auto">Auto (per-key)</option>
+        <option value="sine">Sine</option>
+        <option value="square">Square</option>
+        <option value="sawtooth">Sawtooth</option>
+        <option value="triangle">Triangle</option>
+      </select>
+      <p class="hint" style="margin-top:8px">Backspace/Delete always use the dedicated "delete" sound (lower, shorter, downward sweep).</p>
+    </section>
+
+    <!-- MORE -->
+    <section data-panel="more" class="panel">
+      <h2>Disabled on these sites</h2>
+      <div id="disabledList" class="domain-list"></div>
+      <div class="domain-actions">
+        <input type="text" id="newDomain" placeholder="example.com" />
+        <button id="addDomain" type="button" class="small">Add</button>
+        <button id="addCurrentDomain" type="button" class="small">Add current</button>
+      </div>
+
+      <h2>Accessibility</h2>
+      <div class="row toggles">
+        <label class="switch">
+          <input type="checkbox" id="reducedMotion">
+          <span class="track"></span>
+          <span class="lbl">Reduced motion</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="highContrast">
+          <span class="track"></span>
+          <span class="lbl">High contrast</span>
+        </label>
+      </div>
+
+      <h2>Advanced</h2>
+      <div class="row toggles">
+        <label class="switch">
+          <input type="checkbox" id="useWebGL">
+          <span class="track"></span>
+          <span class="lbl">WebGL renderer</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="enableML">
+          <span class="track"></span>
+          <span class="lbl">Personalize (learn)</span>
+        </label>
+      </div>
+
+      <div class="palette-actions" style="margin-top:12px">
+        <button id="reset" type="button">Reset all to defaults</button>
+      </div>
+    </section>
+  </main>
 
   <footer>
-    <button id="reset" type="button">Reset to defaults</button>
-    <div class="hint">⌃⇧P toggle · ⌃⇧S sound</div>
+    <div class="hint">⌃⇧P toggle · ⌃⇧S sound · Backspace/Delete = imploding red particles</div>
   </footer>
 
   <script src="popup.js"></script>

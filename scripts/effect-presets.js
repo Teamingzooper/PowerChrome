@@ -25,14 +25,28 @@
     retro:   { waveform: 'triangle', bitcrushAmount: 0.8, attack: 0.001, decay: 0.08, gainScale: 0.28 }
   };
 
+  function isValidHex(s) {
+    return typeof s === 'string' && /^#[0-9a-f]{6}$/i.test(s);
+  }
+
+  function resolveCustomPalette() {
+    const settings = (window.__powerMode.main && window.__powerMode.main.getSettings()) || {};
+    const list = Array.isArray(settings.customColors) ? settings.customColors.filter(isValidHex) : [];
+    return list.length ? list : SCHEMES.rainbow;
+  }
+
   window.__powerMode.presets = {
     getPreset: function (name) { return PRESETS[name] || PRESETS.default; },
-    getColorScheme: function (name) { return SCHEMES[name] || SCHEMES.rainbow; },
+    getColorScheme: function (name) {
+      if (name === 'custom') return resolveCustomPalette();
+      return SCHEMES[name] || SCHEMES.rainbow;
+    },
     getSoundPack: function (name) { return PACKS[name] || PACKS.default; },
     LIST: {
       presets: Object.keys(PRESETS),
-      schemes: Object.keys(SCHEMES),
+      schemes: Object.keys(SCHEMES).concat(['custom']),
       packs: Object.keys(PACKS)
-    }
+    },
+    _isValidHex: isValidHex
   };
 })();

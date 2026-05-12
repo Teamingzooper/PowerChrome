@@ -59,11 +59,15 @@
     return node;
   }
 
+  function isDeleteKey(key) {
+    return key === 'Backspace' || key === 'Delete';
+  }
+
   function keyFreq(key) {
     if (!key) return 440;
     if (key === 'Enter') return 880;
     if (key === ' ' || key === 'Space') return 220;
-    if (key === 'Backspace') return 110;
+    if (isDeleteKey(key)) return 90;
     if (key === 'Tab') return 440;
     const ch = key.length === 1 ? key.toUpperCase() : '';
     if (LETTER_NOTES[ch]) return LETTER_NOTES[ch];
@@ -75,10 +79,10 @@
   }
 
   function keyWaveform(key, pack) {
+    if (isDeleteKey(key)) return 'sawtooth';
     if (waveformOverride) return waveformOverride;
     if (key === 'Enter') return 'sine';
     if (key === ' ' || key === 'Space') return 'square';
-    if (key === 'Backspace') return 'sawtooth';
     if (key === 'Tab') return 'triangle';
     return pack.waveform;
   }
@@ -90,19 +94,27 @@
     const presets = window.__powerMode.presets;
     const pack = presets ? presets.getSoundPack(currentPack) : { waveform: 'sine', attack: 0.005, decay: 0.18, gainScale: 0.3 };
     const baseFreq = keyFreq(key);
-    const detune = Math.min((combo || 0) * 4, 1200);
+    const isDelete = isDeleteKey(key);
+    const detune = isDelete ? -200 : Math.min((combo || 0) * 4, 1200);
     const osc = ac.createOscillator();
     osc.type = keyWaveform(key, pack);
     osc.frequency.value = baseFreq;
     osc.detune.value = detune;
     const env = ac.createGain();
     const now = ac.currentTime;
+    const attack = isDelete ? 0.001 : pack.attack;
+    const decay = isDelete ? 0.06 : pack.decay;
+    const gainScale = isDelete ? (pack.gainScale * 0.65) : pack.gainScale;
     env.gain.setValueAtTime(0, now);
-    env.gain.linearRampToValueAtTime(pack.gainScale, now + pack.attack);
-    env.gain.exponentialRampToValueAtTime(0.0001, now + pack.attack + pack.decay);
+    env.gain.linearRampToValueAtTime(gainScale, now + attack);
+    env.gain.exponentialRampToValueAtTime(0.0001, now + attack + decay);
+    if (isDelete) {
+      osc.frequency.setValueAtTime(baseFreq, now);
+      osc.frequency.exponentialRampToValueAtTime(Math.max(40, baseFreq * 0.4), now + decay);
+    }
     osc.connect(env).connect(bitcrushNode);
     osc.start(now);
-    osc.stop(now + pack.attack + pack.decay + 0.08);
+    osc.stop(now + attack + decay + 0.08);
   }
 
   function playArpeggio(tier) {

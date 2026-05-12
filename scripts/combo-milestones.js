@@ -7,18 +7,38 @@
   let lastY = 0;
   const firedThisRun = new Set();
 
-  const MILESTONES = [
-    { at: 10,   tier: 1, name: 'fireworks' },
-    { at: 20,   tier: 2, name: 'galaxy' },
-    { at: 50,   tier: 3, name: 'tornado' },
-    { at: 100,  tier: 4, name: 'supernova' },
-    { at: 200,  tier: 5, name: 'blackhole' },
-    { at: 500,  tier: 6, name: 'bigbang' },
-    { at: 1000, tier: 7, name: 'universe' }
-  ];
+  // Default milestone slots — name → { tier, defaultAt, defaultEffect }
+  const SLOT_DEFAULTS = {
+    fireworks: { tier: 1, at: 10,   effect: 'fireworks' },
+    galaxy:    { tier: 2, at: 20,   effect: 'galaxy' },
+    tornado:   { tier: 3, at: 50,   effect: 'tornado' },
+    supernova: { tier: 4, at: 100,  effect: 'supernova' },
+    blackhole: { tier: 5, at: 200,  effect: 'blackhole' },
+    bigbang:   { tier: 6, at: 500,  effect: 'bigbang' },
+    universe:  { tier: 7, at: 1000, effect: 'universe' }
+  };
+  const SLOT_NAMES = ['fireworks', 'galaxy', 'tornado', 'supernova', 'blackhole', 'bigbang', 'universe'];
+  const EFFECT_NAMES = SLOT_NAMES.slice();
 
   function getSettings() {
     return (window.__powerMode.main && window.__powerMode.main.getSettings()) || {};
+  }
+
+  function getMilestoneList() {
+    const settings = getSettings();
+    const cfg = settings.milestones || {};
+    const out = [];
+    for (let i = 0; i < SLOT_NAMES.length; i++) {
+      const name = SLOT_NAMES[i];
+      const def = SLOT_DEFAULTS[name];
+      const s = cfg[name] || {};
+      const enabled = s.enabled !== false;
+      const at = (typeof s.at === 'number' && s.at > 0) ? Math.floor(s.at) : def.at;
+      const effect = EFFECT_NAMES.indexOf(s.effect) >= 0 ? s.effect : def.effect;
+      out.push({ name: name, tier: def.tier, at: at, effect: effect, enabled: enabled });
+    }
+    out.sort(function (a, b) { return a.at - b.at; });
+    return out;
   }
 
   function reset() {
@@ -26,26 +46,30 @@
     firedThisRun.clear();
   }
 
-  function register(x, y) {
+  function register(x, y, opts) {
+    opts = opts || {};
     const settings = getSettings();
     const timeout = settings.comboTimeout || 1000;
     const now = performance.now();
     if (now - lastKeyAt > timeout) reset();
     lastKeyAt = now;
-    count++;
     lastX = x;
     lastY = y;
-    for (let i = 0; i < MILESTONES.length; i++) {
-      const m = MILESTONES[i];
+    if (opts.noIncrement) return count;
+    count++;
+    const milestones = getMilestoneList();
+    for (let i = 0; i < milestones.length; i++) {
+      const m = milestones[i];
+      if (!m.enabled) continue;
       if (count === m.at && !firedThisRun.has(m.name)) {
         firedThisRun.add(m.name);
-        runMilestone(m, x, y);
+        runEffect(m.effect, m.tier, x, y);
       }
     }
     return count;
   }
 
-  function runMilestone(m, x, y) {
+  function runEffect(effectName, tier, x, y) {
     const particles = window.__powerMode.particles;
     const presets = window.__powerMode.presets;
     const sfx = window.__powerMode.sfx;
@@ -53,7 +77,7 @@
     const a11y = window.__powerMode.accessibility;
     const settings = getSettings();
     const palette = presets ? presets.getColorScheme(settings.colorScheme || 'rainbow') : ['#ffffff'];
-    if (sfx && settings.soundEnabled !== false) sfx.playArpeggio(m.tier);
+    if (sfx && settings.soundEnabled !== false) sfx.playArpeggio(tier);
     if (!particles) return;
 
     const cx = window.innerWidth / 2;
@@ -63,9 +87,9 @@
       particles.spawn(cx, cy, { count: 30, palette: palette, speed: 1, baseSize: 6, life: 400, trails: false });
       return;
     }
-    if (vfx) vfx.shake(20 + m.tier * 5);
+    if (vfx) vfx.shake(20 + tier * 5);
 
-    switch (m.name) {
+    switch (effectName) {
       case 'fireworks':
         for (let i = 0; i < 5; i++) {
           (function (idx) {
@@ -137,17 +161,17 @@
     if (count > 0 && performance.now() - lastKeyAt > timeout) reset();
   }
 
-  function setNow(t) {
-    lastKeyAt = t;
-  }
-
   window.__powerMode.combo = {
     register: register,
     getCount: function () { return count; },
     reset: reset,
     tick: tick,
-    _getMilestones: function () { return MILESTONES; },
+    _getMilestones: getMilestoneList,
     _firedThisRun: firedThisRun,
+    _SLOT_DEFAULTS: SLOT_DEFAULTS,
+    _SLOT_NAMES: SLOT_NAMES,
+    _EFFECT_NAMES: EFFECT_NAMES,
+    _runEffect: runEffect,
     _getLast: function () { return { x: lastX, y: lastY, t: lastKeyAt }; }
   };
 })();

@@ -3,9 +3,10 @@
 
   const POOL_MAX = 2000;
   const POOL_INITIAL = 800;
-  const GRAVITY = 0.15;
-  const FRICTION = 0.985;
+  const DEFAULT_GRAVITY = 0.15;
+  const DEFAULT_FRICTION = 0.985;
   const SHAPES_LIST = ['circle', 'square', 'triangle', 'star', 'diamond'];
+  const DELETE_PALETTE = ['#2a0606', '#5a1010', '#8a1f1f', '#b73838', '#e85555', '#ff7575'];
 
   function makeParticle() {
     return {
@@ -19,7 +20,8 @@
       rotation: 0,
       vrot: 0,
       trail: [],
-      _trailsEnabled: false
+      _trailsEnabled: false,
+      _implode: false
     };
   }
 
@@ -42,15 +44,88 @@
     return (window.__powerMode.main && window.__powerMode.main.getSettings()) || {};
   }
 
+  function generateAngle(direction) {
+    const r = Math.random();
+    switch (direction) {
+      case 'up':
+        return -Math.PI / 2 + (r - 0.5) * (2 * Math.PI / 3);
+      case 'down':
+        return Math.PI / 2 + (r - 0.5) * (2 * Math.PI / 3);
+      case 'coneUp':
+        return -Math.PI / 2 + (r - 0.5) * (Math.PI / 3);
+      case 'coneDown':
+        return Math.PI / 2 + (r - 0.5) * (Math.PI / 3);
+      case 'side': {
+        const side = Math.random() < 0.5 ? 0 : Math.PI;
+        return side + (r - 0.5) * (Math.PI / 4);
+      }
+      case 'radial':
+      default:
+        return r * Math.PI * 2;
+    }
+  }
+
+  function filterShapes(presetShapes, enabledShapes) {
+    const base = (presetShapes && presetShapes.length) ? presetShapes : SHAPES_LIST;
+    if (!enabledShapes) return base;
+    const filtered = [];
+    for (let i = 0; i < base.length; i++) {
+      if (enabledShapes[base[i]] !== false) filtered.push(base[i]);
+    }
+    return filtered.length ? filtered : ['circle'];
+  }
+
+  function spawnDelete(x, y, settings, perf) {
+    const baseCount = Math.max(6, Math.min(14, (settings.particleCount || 12)));
+    let count = baseCount;
+    if (perf && perf.shouldThrottle()) count = Math.floor(count * 0.5);
+    if (count <= 0) return 0;
+    const ringRadius = 24;
+    const lifeMul = settings.particleLifeMul || 1.0;
+    let spawned = 0;
+    for (let i = 0; i < count; i++) {
+      const p = findFree();
+      if (!p) break;
+      const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.4;
+      const r = ringRadius + Math.random() * 14;
+      const sx = x + Math.cos(angle) * r;
+      const sy = y + Math.sin(angle) * r;
+      const speed = 2.5 + Math.random() * 2;
+      const towardAngle = Math.atan2(y - sy, x - sx);
+      p.alive = true;
+      p.x = sx;
+      p.y = sy;
+      p.vx = Math.cos(towardAngle) * speed;
+      p.vy = Math.sin(towardAngle) * speed;
+      p.maxLife = (350 + Math.random() * 200) * lifeMul;
+      p.life = p.maxLife;
+      p.size = 3 + Math.random() * 2;
+      p.color = DELETE_PALETTE[Math.floor(Math.random() * DELETE_PALETTE.length)];
+      p.shape = Math.random() < 0.5 ? 'square' : 'diamond';
+      p.rotation = Math.random() * Math.PI * 2;
+      p.vrot = (Math.random() - 0.5) * 0.3;
+      p.trail.length = 0;
+      p._trailsEnabled = false;
+      p._implode = true;
+      spawned++;
+    }
+    return spawned;
+  }
+
   function spawn(x, y, opts) {
     opts = opts || {};
     const settings = getSettings();
+    const perf = window.__powerMode.perf;
+
+    if (opts.deleteMode) return spawnDelete(x, y, settings, perf);
+
     const presets = window.__powerMode.presets;
     const preset = presets ? presets.getPreset(settings.preset || 'default') : { trails: true, shapes: SHAPES_LIST };
     const palette = opts.palette || (presets ? presets.getColorScheme(settings.colorScheme || 'rainbow') : ['#ffffff']);
-    const shapesAvail = (opts.shapes && opts.shapes.length) ? opts.shapes : ((preset.shapes && preset.shapes.length) ? preset.shapes : SHAPES_LIST);
+    const enabledShapes = settings.enabledShapes;
+    const shapesAvail = (opts.shapes && opts.shapes.length) ? opts.shapes : filterShapes(preset.shapes, enabledShapes);
     const combo = opts.combo || 0;
-    const perf = window.__powerMode.perf;
+
     let count = opts.count != null ? opts.count : ((settings.particleCount != null ? settings.particleCount : 12) + Math.min(combo / 5, 20));
     if (perf && perf.shouldThrottle()) count = Math.floor(count * 0.5);
     if (count <= 0) return 0;
@@ -58,19 +133,35 @@
     const baseSize = opts.baseSize || 4;
     const sizeMul = 1 + Math.log10(1 + combo) * 0.3;
     const speed = opts.speed != null ? opts.speed : (3 + Math.min(combo / 20, 6));
-    const life = opts.life || 800;
+    const lifeMul = settings.particleLifeMul || 1.0;
+    const life = (opts.life || 800) * lifeMul;
     const trails = opts.trails != null ? opts.trails : (preset.trails && !(perf && perf.shouldThrottle()));
     const angleBase = opts.angle != null ? opts.angle : null;
+    const userTriggered = !!opts.userTriggered;
+
+    const offX = userTriggered ? (settings.spawnOffsetX || 0) : 0;
+    const offY = userTriggered ? (settings.spawnOffsetY || 0) : 0;
+    const jitter = userTriggered ? Math.max(0, settings.spawnJitter || 0) : 0;
+    const direction = userTriggered ? (settings.spawnDirection || 'radial') : 'radial';
 
     let spawned = 0;
     for (let i = 0; i < count; i++) {
       const p = findFree();
       if (!p) break;
-      const angle = angleBase != null ? angleBase + (Math.random() - 0.5) * 0.6 : Math.random() * Math.PI * 2;
+      let angle;
+      if (angleBase != null) {
+        angle = angleBase + (Math.random() - 0.5) * 0.6;
+      } else if (userTriggered) {
+        angle = generateAngle(direction);
+      } else {
+        angle = Math.random() * Math.PI * 2;
+      }
       const sp = speed * (0.5 + Math.random());
+      const jx = jitter ? (Math.random() - 0.5) * 2 * jitter : 0;
+      const jy = jitter ? (Math.random() - 0.5) * 2 * jitter : 0;
       p.alive = true;
-      p.x = x;
-      p.y = y;
+      p.x = x + offX + jx;
+      p.y = y + offY + jy;
       p.vx = Math.cos(angle) * sp + (opts.vxBias || 0);
       p.vy = Math.sin(angle) * sp + (opts.vyBias || 0);
       p.maxLife = life * (0.7 + Math.random() * 0.6);
@@ -82,6 +173,7 @@
       p.vrot = (Math.random() - 0.5) * 0.2;
       p.trail.length = 0;
       p._trailsEnabled = !!trails;
+      p._implode = false;
       spawned++;
     }
     return spawned;
@@ -93,6 +185,8 @@
     const a11y = window.__powerMode.accessibility;
     const reduced = (a11y && a11y.prefersReducedMotion()) || settings.reducedMotion;
     const dtScale = dt / 16.67;
+    const gravity = (settings.gravity != null) ? settings.gravity : DEFAULT_GRAVITY;
+    const friction = (settings.friction != null) ? settings.friction : DEFAULT_FRICTION;
     const w = (typeof innerWidth !== 'undefined') ? innerWidth : 1920;
     const h = (typeof innerHeight !== 'undefined') ? innerHeight : 1080;
 
@@ -104,9 +198,15 @@
           p.trail.push(p.x, p.y);
           if (p.trail.length > 8) p.trail.splice(0, p.trail.length - 8);
         }
-        p.vy += GRAVITY * dtScale;
-        p.vx *= Math.pow(FRICTION, dtScale);
-        p.vy *= Math.pow(FRICTION, dtScale);
+        // Imploding particles ignore gravity and decay faster on velocity
+        if (p._implode) {
+          p.vx *= Math.pow(0.96, dtScale);
+          p.vy *= Math.pow(0.96, dtScale);
+        } else {
+          p.vy += gravity * dtScale;
+          p.vx *= Math.pow(friction, dtScale);
+          p.vy *= Math.pow(friction, dtScale);
+        }
         p.x += p.vx * dtScale;
         p.y += p.vy * dtScale;
         p.rotation += p.vrot * dtScale;
@@ -155,6 +255,9 @@
     clear: clear,
     getAliveCount: getAliveCount,
     _pool: pool,
-    _config: { POOL_MAX: POOL_MAX, POOL_INITIAL: POOL_INITIAL, GRAVITY: GRAVITY, FRICTION: FRICTION }
+    _config: { POOL_MAX: POOL_MAX, POOL_INITIAL: POOL_INITIAL, DEFAULT_GRAVITY: DEFAULT_GRAVITY, DEFAULT_FRICTION: DEFAULT_FRICTION },
+    _generateAngle: generateAngle,
+    _filterShapes: filterShapes,
+    _DELETE_PALETTE: DELETE_PALETTE
   };
 })();

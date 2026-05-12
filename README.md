@@ -19,18 +19,26 @@ Bring the satisfying dopamine of [Activate Power Mode](https://github.com/disclo
   - 🟥 1–9 · 🟧 10–49 · 🟪 50–99 · 🟦 100–499 · 🟨 500+
 - **Milestone effects** that trigger once per combo run:
   - 10× fireworks · 20× galaxy swirl · 50× tornado · 100× supernova · 200× black hole · 500× big bang · 1000× universe explosion
+- **Backspace / Delete feel different**: imploding red particles converge toward the caret, with a lower, shorter "thunk" sound, and they don't increment your combo — mistakes shouldn't break a streak.
 
 ### Audio
 - **Bitcrushed synthesis** for that crunchy lo-fi feel (adjustable 0–100%).
-- **Key-specific waveforms**: Enter (sine 880Hz), Space (square 220Hz), Backspace (sawtooth 110Hz), Tab (triangle 440Hz), letters A–G mapped to musical notes.
+- **Key-specific waveforms**: Enter (sine 880Hz), Space (square 220Hz), Backspace/Delete (descending sawtooth 90Hz), Tab (triangle 440Hz), letters A–G mapped to musical notes.
 - **Combo arpeggios** at each milestone.
 - **Four sound packs**: Default · Arcade · Synth · Retro.
 - Volume + bitcrush + waveform override controls.
 
-### Customization
+### Customization (v1.1)
 - **Five visual presets**: Default · Subtle · Intense · Retro · Minimal.
-- **Six color schemes**: Rainbow · Pastel · Neon · Monochrome · Fire · Ocean.
-- **Live sliders** for shake intensity (1–10), particle count (5–30), volume, bitcrush.
+- **Six built-in color schemes** plus a **Custom palette editor** — up to 8 hex slots with native color pickers + text inputs.
+- **Combo customization**: each of the 7 milestone slots has its own toggle, editable threshold, and effect picker — assign any of the 7 effects to any combo number. Want a tornado at 5x? Done.
+- **Spawn customization**: offset X/Y, jitter radius, direction (Radial · Up · Down · Cone↑ · Cone↓ · Sides), particle life multiplier.
+- **HUD location**: near caret · 6 fixed positions · follow cursor — plus HUD scale and opacity sliders.
+- **Per-shape toggles** — disable any of circle/square/triangle/star/diamond.
+- **Physics sliders** — gravity and friction adjustable in real time.
+- **Combo reset timeout** (300–3000 ms).
+- **Per-site disable list** — block PowerChrome on specific domains (with one-click "Add current").
+- **Live sliders** for shake intensity, particle count, volume, bitcrush.
 - Settings sync across all open tabs instantly via `chrome.storage.local`.
 
 ### Smart features

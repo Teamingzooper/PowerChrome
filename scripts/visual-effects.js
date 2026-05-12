@@ -62,17 +62,20 @@
       hideHud();
       return;
     }
+    const settings = getSettings();
+    const scale = settings.hudScale != null ? Math.max(0.3, Math.min(3, settings.hudScale)) : 1;
+    const opacity = settings.hudOpacity != null ? Math.max(0.1, Math.min(1, settings.hudOpacity)) : 1;
     el.textContent = combo + 'x';
     el.style.color = tierColor(combo);
-    const sz = Math.min(20 + combo * 0.5, 96);
+    const sz = Math.min(20 + combo * 0.5, 96) * scale;
     el.style.fontSize = sz + 'px';
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const px = Math.max(8, Math.min(w - 160, x + 20));
-    const py = Math.max(8, Math.min(h - 80, y - 60));
+    const px = Math.max(8, Math.min(w - 160, x));
+    const py = Math.max(8, Math.min(h - 40, y));
     el.style.left = px + 'px';
     el.style.top = py + 'px';
-    el.style.opacity = '1';
+    el.style.opacity = String(opacity);
     el.style.transform = 'scale(1)';
     clearTimeout(hudHideTimer);
     hudHideTimer = setTimeout(hideHud, 1200);

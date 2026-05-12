@@ -4,6 +4,7 @@ const DEFAULTS = {
   soundEnabled: true,
   preset: 'default',
   colorScheme: 'rainbow',
+  customColors: ['#ff3b30', '#ff9500', '#ffcc00', '#34c759', '#5ac8fa', '#007aff', '#af52de'],
   soundPack: 'default',
   shakeIntensity: 5,
   particleCount: 12,
@@ -14,7 +15,28 @@ const DEFAULTS = {
   highContrast: false,
   useWebGL: false,
   enableML: false,
-  comboTimeout: 1000
+  comboTimeout: 1000,
+  spawnOffsetX: 0,
+  spawnOffsetY: 0,
+  spawnJitter: 0,
+  spawnDirection: 'radial',
+  particleLifeMul: 1.0,
+  enabledShapes: { circle: true, square: true, triangle: true, star: true, diamond: true },
+  gravity: 0.15,
+  friction: 0.985,
+  hudPosition: 'caret',
+  hudScale: 1.0,
+  hudOpacity: 1.0,
+  disabledDomains: [],
+  milestones: {
+    fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
+    galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
+    tornado:   { enabled: true, at: 50,   effect: 'tornado' },
+    supernova: { enabled: true, at: 100,  effect: 'supernova' },
+    blackhole: { enabled: true, at: 200,  effect: 'blackhole' },
+    bigbang:   { enabled: true, at: 500,  effect: 'bigbang' },
+    universe:  { enabled: true, at: 1000, effect: 'universe' }
+  }
 };
 
 chrome.runtime.onInstalled.addListener(function () {
