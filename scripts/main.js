@@ -31,6 +31,10 @@
     hudScale: 1.0,
     hudOpacity: 1.0,
     disabledDomains: [],
+    pasteAnimate: true,
+    enterFlash: true,
+    floatInChars: false,
+    spamDetection: true,
     milestones: {
       fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
       galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -201,6 +205,44 @@
     return e.key === 'Backspace' || e.key === 'Delete';
   }
 
+  function isEnterKey(e) {
+    return e.key === 'Enter';
+  }
+
+  /* ---------- Spam detection ----------
+   * Pauses combo growth (and milestones) when the user is either
+   * holding a key (browser auto-repeat) or hammering the same key
+   * fast enough that it isn't real "typing".
+   */
+  let spamLastKey = null;
+  let spamRepeatCount = 0;
+  let spamLastAt = 0;
+  const SPAM_REPEAT_THRESHOLD = 3;     // same key N times in a row
+  const SPAM_INTERVAL_THRESHOLD = 80;  // and each within this many ms
+
+  function shouldPauseForSpam(e) {
+    const settings = currentSettings();
+    if (!settings.spamDetection) return false;
+    if (e && e.repeat) return true;
+    const now = performance.now();
+    const k = e ? e.key : null;
+    const dt = now - spamLastAt;
+    if (k && k === spamLastKey && dt < SPAM_INTERVAL_THRESHOLD) {
+      spamRepeatCount++;
+    } else {
+      spamLastKey = k;
+      spamRepeatCount = 1;
+    }
+    spamLastAt = now;
+    return spamRepeatCount >= SPAM_REPEAT_THRESHOLD;
+  }
+
+  function resetSpamWindow() {
+    spamLastKey = null;
+    spamRepeatCount = 0;
+    spamLastAt = 0;
+  }
+
   function currentSettings() {
     return (window.__powerMode.main && window.__powerMode.main.getSettings && window.__powerMode.main.getSettings()) || settings;
   }
@@ -233,17 +275,33 @@
     if (isModifierOnly(e)) return;
     if (isComboShortcut(e)) return;
 
+    // Paste animator handles its own preventDefault on `paste` events.
+    // We skip processing here while it's animating to avoid double counts.
+    if (window.__powerMode.paste && window.__powerMode.paste._isAnimating()) return;
+
     const pos = caretPos(target);
     const ml = window.__powerMode.ml;
+    const stats = window.__powerMode.stats;
+    const tfx = window.__powerMode.typingFx;
     const deleteMode = isDeleteKey(e);
+    const enterMode = isEnterKey(e);
+    const spammed = !deleteMode && !enterMode && shouldPauseForSpam(e);
+    if (deleteMode || enterMode) resetSpamWindow();
 
     let combo;
     if (window.__powerMode.combo) {
-      combo = window.__powerMode.combo.register(pos.x, pos.y, { noIncrement: deleteMode });
+      combo = window.__powerMode.combo.register(pos.x, pos.y, { noIncrement: deleteMode || spammed });
     } else {
       combo = 1;
     }
     if (ml) ml.recordKeystroke();
+
+    if (stats) {
+      if (deleteMode) stats.recordDelete();
+      else if (enterMode) stats.recordEnter();
+      else if (e.key && e.key.length === 1) stats.recordChar();
+      if (!spammed) stats.recordCombo(combo);
+    }
 
     if (window.__powerMode.particles) {
       const opts = { combo: combo, userTriggered: true };
@@ -251,7 +309,7 @@
       window.__powerMode.particles.spawn(pos.x, pos.y, opts);
     }
     if (window.__powerMode.vfx) {
-      const shakeAmount = deleteMode ? 1.5 : (2 + Math.min(combo / 8, 12));
+      const shakeAmount = deleteMode ? 1.5 : (spammed ? 1 : (2 + Math.min(combo / 8, 12)));
       window.__powerMode.vfx.shake(shakeAmount);
       if (!deleteMode) {
         const hudPos = resolveHudPos(pos);
@@ -260,6 +318,13 @@
     }
     if (settings.soundEnabled && window.__powerMode.sfx) {
       window.__powerMode.sfx.play(e.key, combo);
+    }
+    if (enterMode && tfx) {
+      tfx.flashEnter();
+      tfx.spawnCarriageReturnParticles(pos.x, pos.y);
+    }
+    if (!deleteMode && !enterMode && tfx && e.key && e.key.length === 1) {
+      tfx.floatChar(e.key, pos.x, pos.y);
     }
   }
 
@@ -396,12 +461,14 @@
           const stored = (res && res[STORAGE_KEY]) || {};
           applySettings(applyAccessibilityOverrides(Object.assign({}, DEFAULTS, stored)));
           if (window.__powerMode.ml) window.__powerMode.ml.init();
+          if (window.__powerMode.stats) window.__powerMode.stats.init();
         });
       } catch (e) {
         applySettings(applyAccessibilityOverrides(DEFAULTS));
       }
     } else {
       applySettings(applyAccessibilityOverrides(DEFAULTS));
+      if (window.__powerMode.stats) window.__powerMode.stats.init();
     }
 
     if (hasChromeRuntime()) {
@@ -439,8 +506,11 @@
     _caretPos: caretPos,
     _isEditable: isEditable,
     _isDeleteKey: isDeleteKey,
+    _isEnterKey: isEnterKey,
     _isDomainDisabled: isDomainDisabled,
     _resolveHudPos: resolveHudPos,
+    _shouldPauseForSpam: shouldPauseForSpam,
+    _resetSpamWindow: resetSpamWindow,
     _onKeydown: onKeydown,
     _applySettingsRaw: applySettings,
     _applyAccessibilityOverrides: applyAccessibilityOverrides

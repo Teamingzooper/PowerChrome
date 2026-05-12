@@ -47,6 +47,23 @@ Bring the satisfying dopamine of [Activate Power Mode](https://github.com/disclo
 - **Performance monitoring**: live FPS readout in the popup, automatic throttling if frame rate drops below 30 fps for 2 seconds.
 - **WebGL renderer (opt-in)**: switch to a GPU point-sprite renderer for very heavy combos.
 
+### Typing feel (v1.2)
+
+- **Paste animation** — paste anywhere and the text snaps in character-by-character with an ease-in cadence (slow → fast, ~120 ms → 15 ms), counting as a single combo so a paste doesn't artificially inflate your stats.
+- **Enter flash** — pressing Return triggers a brief screen flash plus a horizontal "carriage return" particle sweep, mimicking a typewriter's line break.
+- **Float-in letters** *(opt-in)* — the literal character you typed appears above the caret and snaps to position with a soft fade, on top of the regular particle effects.
+- **Combo spam detection** — holding a key or hammering the same character pauses your combo (so it doesn't grow off-cheating) without resetting your existing streak. Spam stops the moment you actually type something different.
+- **Backspace + Delete** stay imploding red particles with a short downward thunk, and they never break a streak.
+
+### Stats & profile (v1.2)
+
+- Open a full **stats dashboard** in a new tab from the popup's **More → Open stats / profile** button (also lives at `chrome-extension://<id>/stats.html`).
+- Tracks **highest combo**, **total characters typed**, **longest streak**, **total active time**, **backspace ratio**, **pastes animated**, and the **last 30 days** as a bar chart.
+- **Per-site top 10** so you can see which sites you actually type on.
+- **Milestones unlocked** count — every time you hit fireworks / galaxy / tornado / supernova / black hole / big bang / universe is recorded.
+- **Profile** — pick a username and an emoji avatar.
+- **Local-only leaderboard** today, with global/friends leaderboards reserved for a future release. Stats are stored locally and would sync upward when the backend ships.
+
 ### Keyboard shortcuts
 - `Ctrl+Shift+P` — toggle Power Mode on/off
 - `Ctrl+Shift+S` — toggle sound effects

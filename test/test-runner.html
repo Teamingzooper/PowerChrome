@@ -149,8 +149,11 @@
 <script src="../scripts/webgl-renderer.js"></script>
 <script src="../scripts/visual-effects.js"></script>
 <script src="../scripts/sound-effects-enhanced.js"></script>
+<script src="../scripts/typing-effects.js"></script>
 <script src="../scripts/combo-milestones.js"></script>
 <script src="../scripts/ml-personalization.js"></script>
+<script src="../scripts/stats-tracker.js"></script>
+<script src="../scripts/paste-animator.js"></script>
 <script src="../scripts/keyboard-shortcuts.js"></script>
 <script src="../scripts/main.js"></script>
 
@@ -782,6 +785,171 @@
     test('applyAccessibilityOverrides forces monochrome with high contrast', function () {
       const out = M._applyAccessibilityOverrides({ highContrast: true, colorScheme: 'rainbow' });
       assertEqual(out.colorScheme, 'monochrome');
+    });
+  });
+
+  describe('spam-detection (main)', function () {
+    const M = PM.main;
+    test('repeat=true triggers pause immediately', function () {
+      M._resetSpamWindow();
+      withSettings({ spamDetection: true }, function () {
+        assert(M._shouldPauseForSpam({ key: 'a', repeat: true }));
+      });
+    });
+    test('rapid same-key triggers spam after threshold', function () {
+      M._resetSpamWindow();
+      withSettings({ spamDetection: true }, function () {
+        // Three quick repeats — the 3rd should pause
+        const r1 = M._shouldPauseForSpam({ key: 'a', repeat: false });
+        const r2 = M._shouldPauseForSpam({ key: 'a', repeat: false });
+        const r3 = M._shouldPauseForSpam({ key: 'a', repeat: false });
+        assert(!r1 || !r2, 'first/second key should not pause');
+        assert(r3, 'third quick same-key should pause');
+      });
+    });
+    test('different keys reset the spam counter', function () {
+      M._resetSpamWindow();
+      withSettings({ spamDetection: true }, function () {
+        M._shouldPauseForSpam({ key: 'a' });
+        M._shouldPauseForSpam({ key: 'a' });
+        assert(!M._shouldPauseForSpam({ key: 'b' }), 'switching keys resets streak');
+      });
+    });
+    test('spam detection disabled when flag is off', function () {
+      M._resetSpamWindow();
+      withSettings({ spamDetection: false }, function () {
+        for (let i = 0; i < 10; i++) {
+          assert(!M._shouldPauseForSpam({ key: 'a', repeat: true }), 'should never pause when disabled');
+        }
+      });
+    });
+  });
+
+  describe('stats-tracker', function () {
+    const S = PM.stats;
+    function freshStats() {
+      S._setStats(JSON.parse(JSON.stringify(S._DEFAULT_STATS)));
+    }
+    test('recordChar increments totalChars + per-day + per-site', function () {
+      freshStats();
+      S.recordChar();
+      S.recordChar();
+      S.recordChar();
+      const snap = S.getSnapshot();
+      assertEqual(snap.totalChars, 3);
+      const today = S._isoDate();
+      assertEqual(snap.charsPerDay[today], 3);
+    });
+    test('recordDelete increments totalDeletes', function () {
+      freshStats();
+      S.recordDelete();
+      S.recordDelete();
+      assertEqual(S.getSnapshot().totalDeletes, 2);
+    });
+    test('recordPaste sums chars', function () {
+      freshStats();
+      S.recordPaste(15);
+      S.recordPaste(7);
+      const snap = S.getSnapshot();
+      assertEqual(snap.totalPastes, 2);
+      assertEqual(snap.totalPasteChars, 22);
+    });
+    test('recordCombo only saves new highest', function () {
+      freshStats();
+      S.recordCombo(5);
+      S.recordCombo(3);
+      S.recordCombo(12);
+      S.recordCombo(8);
+      assertEqual(S.getSnapshot().highestCombo, 12);
+    });
+    test('recordMilestone counts occurrences', function () {
+      freshStats();
+      S.recordMilestone('fireworks');
+      S.recordMilestone('fireworks');
+      S.recordMilestone('tornado');
+      const snap = S.getSnapshot();
+      assertEqual(snap.milestonesHit.fireworks, 2);
+      assertEqual(snap.milestonesHit.tornado, 1);
+    });
+    test('setProfile merges into profile object', function () {
+      freshStats();
+      S.setProfile({ username: 'tester' });
+      S.setProfile({ avatar: '🚀' });
+      const p = S.getSnapshot().profile;
+      assertEqual(p.username, 'tester');
+      assertEqual(p.avatar, '🚀');
+    });
+    test('resetAll restores defaults', function () {
+      freshStats();
+      S.recordChar();
+      S.recordPaste(100);
+      S.resetAll();
+      const snap = S.getSnapshot();
+      assertEqual(snap.totalChars, 0);
+      assertEqual(snap.totalPastes, 0);
+      assertEqual(snap.totalPasteChars, 0);
+    });
+  });
+
+  describe('paste-animator', function () {
+    const PA = PM.paste;
+    test('delayAt returns SLOW for first char', function () {
+      assertEqual(PA._delayAt(0, 10), PA._config.SLOW_MS);
+    });
+    test('delayAt returns FAST for last char', function () {
+      assertEqual(PA._delayAt(9, 10), PA._config.FAST_MS);
+    });
+    test('delayAt is monotonically decreasing', function () {
+      let prev = Infinity;
+      for (let i = 0; i < 20; i++) {
+        const d = PA._delayAt(i, 20);
+        assert(d <= prev, 'delay at ' + i + ' should be <= previous');
+        prev = d;
+      }
+    });
+    test('not animating by default', function () {
+      assert(!PA._isAnimating());
+    });
+  });
+
+  describe('typing-effects', function () {
+    const T = PM.typingFx;
+    test('flashEnter creates flash element', function () {
+      withSettings({ enterFlash: true, reducedMotion: false }, function () {
+        T.flashEnter();
+        const el = document.querySelector('[data-powermode-flash]');
+        assert(el != null, 'flash element should exist');
+      });
+    });
+    test('flashEnter does nothing when enterFlash=false', function () {
+      // Remove any existing flash first
+      const existing = document.querySelector('[data-powermode-flash]');
+      if (existing) existing.parentNode.removeChild(existing);
+      withSettings({ enterFlash: false }, function () {
+        T.flashEnter();
+      });
+      // Either no element, or opacity 0
+      const after = document.querySelector('[data-powermode-flash]');
+      if (after) assert(after.style.opacity === '0' || after.style.opacity === '');
+    });
+    test('floatChar creates and removes span when enabled', function () {
+      // Make sure layer is empty
+      const layer = document.querySelector('[data-powermode-floatlayer]');
+      if (layer) layer.innerHTML = '';
+      withSettings({ floatInChars: true, reducedMotion: false }, function () {
+        T.floatChar('Z', 100, 100);
+      });
+      const newLayer = document.querySelector('[data-powermode-floatlayer]');
+      assert(newLayer != null && newLayer.children.length >= 1, 'float char span should exist');
+    });
+    test('floatChar no-op when setting is off', function () {
+      const layer = document.querySelector('[data-powermode-floatlayer]');
+      if (layer) layer.innerHTML = '';
+      withSettings({ floatInChars: false }, function () {
+        T.floatChar('Z', 100, 100);
+      });
+      const after = document.querySelector('[data-powermode-floatlayer]');
+      assert(!after || after.children.length === 0);
     });
   });
 

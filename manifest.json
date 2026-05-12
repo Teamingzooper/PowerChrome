@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "PowerChrome — Activate Power Mode",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Explosive particles, screen shake, combos, and bitcrushed audio in every text box.",
   "permissions": ["activeTab", "storage", "tabs"],
   "action": {
@@ -29,8 +29,11 @@
         "scripts/webgl-renderer.js",
         "scripts/visual-effects.js",
         "scripts/sound-effects-enhanced.js",
+        "scripts/typing-effects.js",
         "scripts/combo-milestones.js",
         "scripts/ml-personalization.js",
+        "scripts/stats-tracker.js",
+        "scripts/paste-animator.js",
         "scripts/keyboard-shortcuts.js",
         "scripts/main.js",
         "content.js"

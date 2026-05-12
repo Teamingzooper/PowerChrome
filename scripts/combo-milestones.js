@@ -64,6 +64,9 @@
       if (count === m.at && !firedThisRun.has(m.name)) {
         firedThisRun.add(m.name);
         runEffect(m.effect, m.tier, x, y);
+        if (window.__powerMode.stats) {
+          try { window.__powerMode.stats.recordMilestone(m.name); } catch (e) { /* ignore */ }
+        }
       }
     }
     return count;

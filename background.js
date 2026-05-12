@@ -28,6 +28,10 @@ const DEFAULTS = {
   hudScale: 1.0,
   hudOpacity: 1.0,
   disabledDomains: [],
+  pasteAnimate: true,
+  enterFlash: true,
+  floatInChars: false,
+  spamDetection: true,
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },

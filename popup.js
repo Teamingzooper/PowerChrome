@@ -29,6 +29,10 @@ const DEFAULTS = {
   hudScale: 1.0,
   hudOpacity: 1.0,
   disabledDomains: [],
+  pasteAnimate: true,
+  enterFlash: true,
+  floatInChars: false,
+  spamDetection: true,
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -419,6 +423,10 @@ function refresh() {
   $('#highContrast').checked = !!state.highContrast;
   $('#useWebGL').checked = !!state.useWebGL;
   $('#enableML').checked = !!state.enableML;
+  $('#pasteAnimate').checked = !!state.pasteAnimate;
+  $('#enterFlash').checked = !!state.enterFlash;
+  $('#floatInChars').checked = !!state.floatInChars;
+  $('#spamDetection').checked = !!state.spamDetection;
 
   $$('#presetChips button').forEach(function (b) {
     b.classList.toggle('active', b.dataset.preset === state.preset);
@@ -440,6 +448,10 @@ function bindBasics() {
   bindCheckbox('highContrast', 'highContrast');
   bindCheckbox('useWebGL', 'useWebGL');
   bindCheckbox('enableML', 'enableML');
+  bindCheckbox('pasteAnimate', 'pasteAnimate');
+  bindCheckbox('enterFlash', 'enterFlash');
+  bindCheckbox('floatInChars', 'floatInChars');
+  bindCheckbox('spamDetection', 'spamDetection');
 
   bindSelect('colorScheme', 'colorScheme', updateCustomColorsVisibility);
   bindSelect('soundPack', 'soundPack');
@@ -496,6 +508,12 @@ function bindBasics() {
     state = mergeDefaults({});
     refresh();
     save();
+  });
+
+  $('#openStats').addEventListener('click', function () {
+    try {
+      chrome.tabs.create({ url: chrome.runtime.getURL('stats.html') });
+    } catch (e) { /* ignore */ }
   });
 }
 

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PowerChrome — Stats & Profile</title>
+  <link rel="stylesheet" href="stats.css">
+  <link rel="icon" type="image/png" href="icons/icon48.png">
+</head>
+<body>
+  <header class="page-header">
+    <div class="brand">
+      <span class="logo">⚡</span>
+      <h1>PowerChrome</h1>
+      <span class="version">v1.2.0</span>
+    </div>
+    <div class="profile" id="profile">
+      <button class="avatar" id="avatarBtn" type="button" title="Change avatar">⚡</button>
+      <div class="profile-id">
+        <input type="text" id="username" placeholder="Add a username" maxlength="24" autocomplete="off" spellcheck="false" />
+        <span class="profile-since" id="profileSince">First use: —</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="avatar-picker" id="avatarPicker" hidden>
+    <div class="avatar-grid" id="avatarGrid"></div>
+  </div>
+
+  <main>
+    <section class="card hero">
+      <h2 class="card-title">Highlights</h2>
+      <div class="hero-grid">
+        <div class="stat">
+          <div class="stat-label">Highest combo</div>
+          <div class="stat-value" id="statHighestCombo">0</div>
+          <div class="stat-sub" id="statHighestComboSub">no streak yet</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Characters typed</div>
+          <div class="stat-value" id="statTotalChars">0</div>
+          <div class="stat-sub" id="statTotalCharsSub">across all sites</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Longest streak</div>
+          <div class="stat-value" id="statLongestStreak">0s</div>
+          <div class="stat-sub">contiguous typing</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Active time</div>
+          <div class="stat-value" id="statActiveTime">0m</div>
+          <div class="stat-sub" id="statActiveTimeSub">total</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Backspaces</div>
+          <div class="stat-value" id="statTotalDeletes">0</div>
+          <div class="stat-sub" id="statDeleteRatio">— delete ratio</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Pastes animated</div>
+          <div class="stat-value" id="statTotalPastes">0</div>
+          <div class="stat-sub" id="statPasteCharsSub">chars eased in</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Last 30 days</h2>
+      <div class="chart" id="dayChart"></div>
+      <div class="chart-legend">
+        <span id="chartTotal">Total: 0</span>
+        <span id="chartPeak">Peak day: —</span>
+      </div>
+    </section>
+
+    <section class="grid-2-cols">
+      <section class="card">
+        <h2 class="card-title">Top sites</h2>
+        <ol class="site-list" id="siteList"></ol>
+      </section>
+
+      <section class="card">
+        <h2 class="card-title">Milestones unlocked</h2>
+        <ul class="milestone-list" id="milestoneList"></ul>
+      </section>
+    </section>
+
+    <section class="card leaderboard">
+      <h2 class="card-title">Leaderboards</h2>
+      <div class="leaderboard-grid">
+        <div class="lb-col">
+          <h3>Highest combo</h3>
+          <ol class="lb-list">
+            <li class="lb-me"><span class="rank">1</span><span class="name" id="lbComboMeName">you</span><span class="val" id="lbComboMeVal">0</span></li>
+            <li class="lb-stub"><span class="rank">2</span><span class="name">— invite a friend —</span><span class="val">—</span></li>
+            <li class="lb-stub"><span class="rank">3</span><span class="name">— invite a friend —</span><span class="val">—</span></li>
+          </ol>
+        </div>
+        <div class="lb-col">
+          <h3>Characters typed</h3>
+          <ol class="lb-list">
+            <li class="lb-me"><span class="rank">1</span><span class="name" id="lbCharsMeName">you</span><span class="val" id="lbCharsMeVal">0</span></li>
+            <li class="lb-stub"><span class="rank">2</span><span class="name">— invite a friend —</span><span class="val">—</span></li>
+            <li class="lb-stub"><span class="rank">3</span><span class="name">— invite a friend —</span><span class="val">—</span></li>
+          </ol>
+        </div>
+      </div>
+      <p class="hint">
+        Global + friends leaderboards are coming in a future release. Your stats already live locally and will sync automatically once the leaderboard backend ships.
+      </p>
+    </section>
+
+    <section class="card danger">
+      <h2 class="card-title">Danger zone</h2>
+      <p class="hint">Resetting clears every counter and your milestone history. Your settings (palette, milestones, sliders) are not affected.</p>
+      <button id="resetStats" class="danger-btn" type="button">Reset all stats</button>
+    </section>
+  </main>
+
+  <footer class="page-footer">
+    <span>Made with ⚡ — open-source on GitHub</span>
+    <a href="https://github.com/Teamingzooper/PowerChrome" target="_blank" rel="noopener">Teamingzooper/PowerChrome</a>
+  </footer>
+
+  <script src="stats.js"></script>
+</body>
+</html>
