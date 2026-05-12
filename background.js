@@ -33,6 +33,13 @@ const DEFAULTS = {
   floatInChars: false,
   spamDetection: true,
   debugMode: false,
+  selectionEffects: true,
+  comboBar: true,
+  comboBarStyle: 'thin',
+  trailLength: 4,
+  clickEffects: false,
+  backendKind: 'auto',
+  backendUrl: '',
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },

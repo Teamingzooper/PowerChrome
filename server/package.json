@@ -1,0 +1,10 @@
+{
+  "name": "powerchrome-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend for the PowerChrome Chrome extension — accounts, friends, leaderboards.",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "vercel dev"
+  }
+}

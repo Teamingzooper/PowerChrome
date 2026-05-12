@@ -72,6 +72,44 @@ Bring the satisfying dopamine of [Activate Power Mode](https://github.com/disclo
 - A **Diagnostics** card on the stats page shows the same data plus AudioWorklet support, account info, and the active backend. Useful for filing issues.
 - The bitcrusher now uses an **AudioWorklet** (worker thread, no main-thread blocking, no deprecation warnings); it falls back to `ScriptProcessorNode` only if `audioWorklet` isn't available in the browser.
 
+### Text selection effects (v1.4)
+
+- **Copy** a selection (`⌘C` / `Ctrl+C`) and a celebratory cyan streak sweeps upward along the selection range, with a soft ascending arpeggio.
+- **Cut** (`⌘X`) fires a hybrid burst: upward yellow/orange streaks plus a brief imploding red flash, scaled to the length of the selection.
+- **Backspace / Delete with a non-empty selection** spawns an imploding ring of red particles scaled to the deletion length — bigger selections feel weightier. The combo doesn't increment.
+- All three effects can be turned off in **Particles → Select / cut / copy effects**.
+
+### Combo timeout bar (v1.4)
+
+- A thin progress bar sits under the combo counter showing how much time is left before the combo resets. Width shrinks smoothly toward zero; the bar's color follows the tier color of the current combo.
+- Toggle in **Combo → Timeout bar**. Two styles: **thin** (constant) or **pulse** (pulses near the end for a panic vibe).
+
+### More polish (v1.4)
+
+- **Trail length slider** (0–12 segments) under **Particles → Trails & extras**. Set to 0 for crisp non-trailing particles, 12 for long comet streaks.
+- **Click bursts** toggle — every mouse click anywhere on the page spawns a tiny burst of particles. Off by default.
+
+### Real backend (v1.4)
+
+The repo now ships a Node.js Vercel-deployable backend in [`server/`](server/) with:
+
+- POST `/api/account/init` — generates a friend code + secret token
+- POST `/api/account/get` · `/api/account/update`
+- POST `/api/stats/sync` — monotonic counters; server never lowers a stat
+- POST `/api/friends/add` · `/api/friends/remove` · `/api/friends/list`
+- POST `/api/leaderboard` — `kind: 'combo' | 'chars'` × `scope: 'friends' | 'global'`
+- GET `/api/health` — surfaces the active storage backend (`memory` or `kv`)
+
+Persistence is via Vercel KV (Upstash Redis); without it the function falls back to in-process memory. After deploying the server directory, attach a KV store in the Vercel dashboard's Storage tab to make data durable across cold starts.
+
+The extension's social backend (popup → **More → Social backend**) has three modes:
+
+- **Auto** — try remote, fall back to local mock if the server is unreachable
+- **Remote only** — uses the URL in the **Backend URL** field
+- **Local mock only** — pre-1.4 behavior, synthetic friends and leaderboards
+
+Stats sync to the server every 15 seconds when the remote backend is active.
+
 ### Site coverage (v1.3)
 
 - Content scripts now inject into **all frames** (with safeguards against tiny ad iframes) so editors-in-iframes work — Google Docs / Sheets / Slides, Figma, embedded CodeMirror, etc.

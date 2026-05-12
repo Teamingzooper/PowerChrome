@@ -108,6 +108,23 @@
         <label class="shape-pill"><input type="checkbox" data-shape="star"><span>★ Star</span></label>
         <label class="shape-pill"><input type="checkbox" data-shape="diamond"><span>◆ Diamond</span></label>
       </div>
+
+      <h2>Trails & extras</h2>
+      <div class="sliders">
+        <label><span>Trail length</span><input type="range" id="trailLength" min="0" max="12" step="1"><output id="trailLengthVal"></output></label>
+      </div>
+      <div class="row toggles wrap">
+        <label class="switch">
+          <input type="checkbox" id="clickEffects">
+          <span class="track"></span>
+          <span class="lbl">Click bursts</span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="selectionEffects">
+          <span class="track"></span>
+          <span class="lbl">Select / cut / copy effects</span>
+        </label>
+      </div>
     </section>
 
     <!-- COMBO -->
@@ -128,6 +145,19 @@
         <label><span>HUD scale</span><input type="range" id="hudScale" min="50" max="200" step="5"><output id="hudScaleVal"></output></label>
         <label><span>HUD opacity</span><input type="range" id="hudOpacity" min="10" max="100" step="5"><output id="hudOpacityVal"></output></label>
         <label><span>Reset (ms)</span><input type="range" id="comboTimeout" min="300" max="3000" step="50"><output id="comboTimeoutVal"></output></label>
+      </div>
+
+      <h2>Timeout bar</h2>
+      <div class="row toggles wrap">
+        <label class="switch">
+          <input type="checkbox" id="comboBar">
+          <span class="track"></span>
+          <span class="lbl">Show under combo counter</span>
+        </label>
+      </div>
+      <div class="chips" id="comboBarStyleChips" style="margin-top:6px">
+        <button data-style="thin" type="button">Thin</button>
+        <button data-style="pulse" type="button">Pulse near end</button>
       </div>
 
       <h2>Milestone effects</h2>
@@ -186,6 +216,17 @@
         <button id="openStats" type="button">Open stats / profile</button>
         <span class="hint">Highest combo · characters typed · milestones · friend codes · leaderboards · diagnostics.</span>
       </div>
+
+      <h2>Social backend</h2>
+      <select id="backendKind">
+        <option value="auto">Auto (try remote, fall back to local)</option>
+        <option value="remote">Remote only</option>
+        <option value="local">Local mock only</option>
+      </select>
+      <div class="sliders" style="margin-top:6px">
+        <label style="grid-template-columns:80px 1fr"><span>URL</span><input type="text" id="backendUrl" placeholder="https://powerchrome-api.vercel.app" autocomplete="off" spellcheck="false"></label>
+      </div>
+      <p class="hint">Leave blank to use the built-in default. Stats sync to the server every few seconds when remote backend is reachable.</p>
 
       <h2>Debug</h2>
       <div class="row toggles">

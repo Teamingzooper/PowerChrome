@@ -36,6 +36,13 @@
     floatInChars: false,
     spamDetection: true,
     debugMode: false,
+    selectionEffects: true,
+    comboBar: true,
+    comboBarStyle: 'thin',
+    trailLength: 4,
+    clickEffects: false,
+    backendKind: 'auto',
+    backendUrl: '',
     milestones: {
       fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
       galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -344,6 +351,16 @@
     }
     if (ml) ml.recordKeystroke();
 
+    // Backspace/Delete with a non-empty selection deletes a span of text —
+    // give it a bigger feel proportional to the deletion length.
+    let selectionDeleteLen = 0;
+    if (deleteMode && window.__powerMode.selectionFx) {
+      selectionDeleteLen = window.__powerMode.selectionFx._getSelectionLength(target);
+      if (selectionDeleteLen > 0) {
+        window.__powerMode.selectionFx.onSelectionDelete(target, selectionDeleteLen);
+      }
+    }
+
     if (stats) {
       if (deleteMode) stats.recordDelete();
       else if (enterMode) stats.recordEnter();
@@ -354,7 +371,10 @@
     if (window.__powerMode.particles) {
       const opts = { combo: combo, userTriggered: true };
       if (deleteMode) opts.deleteMode = true;
-      window.__powerMode.particles.spawn(pos.x, pos.y, opts);
+      // Selection-delete already handled its own burst — skip the single-char one.
+      if (!(deleteMode && selectionDeleteLen > 0)) {
+        window.__powerMode.particles.spawn(pos.x, pos.y, opts);
+      }
     }
     if (window.__powerMode.vfx) {
       const shakeAmount = deleteMode ? 1.5 : (spammed ? 1 : (2 + Math.min(combo / 8, 12)));

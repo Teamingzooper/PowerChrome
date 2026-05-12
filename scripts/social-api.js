@@ -260,9 +260,10 @@
     persist();
   }
 
-  /* ---------- Backend object ---------- */
+  /* ---------- Mock backend ---------- */
   const MOCK_BACKEND = {
     name: 'local-mock',
+    isSync: true,
     getMyAccount: function () { return getMyProfile(); },
     addFriendByCode: function (code, opts) { return addFriendByCode(code, opts); },
     removeFriend: function (code) { return removeFriend(code); },
@@ -272,13 +273,360 @@
     resetFriends: resetFriends
   };
 
+  /* ---------- Remote backend ---------- *
+   * Talks to the deployed PowerChrome API (server/ directory). Storage layout:
+   *   chrome.storage.local.powerModeAccount = { friendCode, token, backendUrl }
+   * Tokens are persisted locally; the API never lowers stats so re-sync is safe.
+   *
+   * Auto-fallback: if a network call fails twice in a row, we fall back to the
+   * mock backend for the remainder of the session so the UI never deadlocks
+   * on an unreachable server.
+   */
+  const DEFAULT_BACKEND_URL = 'https://powerchrome-api.vercel.app';
+  const REMOTE_CACHE = { friends: [], leaderboards: {}, status: { backend: 'remote', online: false } };
+  let remoteAccount = null;
+  let remoteUrl = '';
+  let remoteFailureCount = 0;
+  let remoteListeners = [];
+
+  function notifyRemote() {
+    for (let i = 0; i < remoteListeners.length; i++) {
+      try { remoteListeners[i](); } catch (e) { /* ignore */ }
+    }
+  }
+
+  function hasChromeStorageRemote() {
+    return typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local;
+  }
+
+  function loadRemoteAccount(cb) {
+    if (!hasChromeStorageRemote()) { remoteAccount = null; if (cb) cb(); return; }
+    try {
+      chrome.storage.local.get(['powerModeAccount'], function (res) {
+        remoteAccount = (res && res.powerModeAccount) || null;
+        if (cb) cb();
+      });
+    } catch (e) { remoteAccount = null; if (cb) cb(); }
+  }
+
+  function saveRemoteAccount() {
+    if (!hasChromeStorageRemote() || !remoteAccount) return;
+    try { chrome.storage.local.set({ powerModeAccount: remoteAccount }); } catch (e) { /* ignore */ }
+  }
+
+  function getRemoteUrl() {
+    if (remoteUrl) return remoteUrl;
+    const s = window.__powerMode.main && window.__powerMode.main.getSettings();
+    if (s && s.backendUrl) return s.backendUrl;
+    return DEFAULT_BACKEND_URL;
+  }
+
+  function apiUrl(path) {
+    return getRemoteUrl().replace(/\/$/, '') + path;
+  }
+
+  async function apiPost(path, body, opts) {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timeout = setTimeout(function () { if (ctrl) ctrl.abort(); }, (opts && opts.timeoutMs) || 6000);
+    try {
+      const res = await fetch(apiUrl(path), {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body || {}),
+        signal: ctrl ? ctrl.signal : undefined
+      });
+      clearTimeout(timeout);
+      if (!res.ok) {
+        const text = await res.text();
+        const err = new Error('http ' + res.status);
+        err.payload = text;
+        throw err;
+      }
+      return await res.json();
+    } catch (e) {
+      clearTimeout(timeout);
+      throw e;
+    }
+  }
+
+  async function apiHealth() {
+    const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timeout = setTimeout(function () { if (ctrl) ctrl.abort(); }, 4000);
+    try {
+      const res = await fetch(apiUrl('/api/health'), { signal: ctrl ? ctrl.signal : undefined });
+      clearTimeout(timeout);
+      if (!res.ok) return null;
+      return await res.json();
+    } catch (e) {
+      clearTimeout(timeout);
+      return null;
+    }
+  }
+
+  async function ensureRemoteAccount() {
+    if (!remoteAccount) await new Promise(function (r) { loadRemoteAccount(r); });
+    if (remoteAccount && remoteAccount.token) return remoteAccount;
+
+    // Create a brand-new account on the server. Username/avatar come from
+    // local stats if present so the cloud profile matches the local one.
+    const stats = window.__powerMode.stats ? window.__powerMode.stats.getSnapshot() : null;
+    const profile = (stats && stats.profile) || { username: '', avatar: '⚡' };
+    const result = await apiPost('/api/account/init', {
+      username: profile.username || 'player',
+      avatar: profile.avatar || '⚡'
+    });
+    if (!result || !result.ok) throw new Error('init failed');
+    remoteAccount = {
+      friendCode: result.friendCode,
+      token: result.token,
+      createdAt: new Date().toISOString()
+    };
+    saveRemoteAccount();
+    return remoteAccount;
+  }
+
+  function markRemoteFailure() {
+    remoteFailureCount++;
+    REMOTE_CACHE.status.online = false;
+    notifyRemote();
+  }
+  function markRemoteSuccess() {
+    remoteFailureCount = 0;
+    REMOTE_CACHE.status.online = true;
+    notifyRemote();
+  }
+
+  async function pingRemote() {
+    const h = await apiHealth();
+    if (h && h.ok) {
+      REMOTE_CACHE.status.online = true;
+      REMOTE_CACHE.status.storage = h.storage;
+      REMOTE_CACHE.status.serverUrl = getRemoteUrl();
+    } else {
+      REMOTE_CACHE.status.online = false;
+    }
+    notifyRemote();
+    return h;
+  }
+
+  async function syncStatsToRemote() {
+    if (!remoteAccount || !remoteAccount.token) return;
+    const stats = window.__powerMode.stats ? window.__powerMode.stats.getSnapshot() : null;
+    if (!stats) return;
+    try {
+      await apiPost('/api/stats/sync', {
+        token: remoteAccount.token,
+        highestCombo: stats.highestCombo || 0,
+        totalChars: stats.totalChars || 0,
+        totalDeletes: stats.totalDeletes || 0,
+        totalEnters: stats.totalEnters || 0
+      });
+      markRemoteSuccess();
+    } catch (e) {
+      markRemoteFailure();
+    }
+  }
+
+  async function refreshRemoteFriends() {
+    if (!remoteAccount || !remoteAccount.token) return [];
+    try {
+      const res = await apiPost('/api/friends/list', { token: remoteAccount.token });
+      if (res && res.ok) {
+        REMOTE_CACHE.friends = (res.friends || []).map(function (f) {
+          return Object.assign({ isMe: false }, f, { name: f.username || 'friend' });
+        });
+        markRemoteSuccess();
+      }
+    } catch (e) {
+      markRemoteFailure();
+    }
+    return REMOTE_CACHE.friends;
+  }
+
+  async function refreshRemoteLeaderboard(kind, scope) {
+    const key = kind + '/' + scope;
+    if (!remoteAccount || !remoteAccount.token) return [];
+    try {
+      const res = await apiPost('/api/leaderboard', {
+        token: remoteAccount.token,
+        kind: kind,
+        scope: scope,
+        limit: 20
+      });
+      if (res && res.ok) {
+        REMOTE_CACHE.leaderboards[key] = (res.rows || []).map(function (r) {
+          return Object.assign({ name: r.username || 'player' }, r);
+        });
+        markRemoteSuccess();
+      }
+    } catch (e) {
+      markRemoteFailure();
+    }
+    return REMOTE_CACHE.leaderboards[key] || [];
+  }
+
+  const REMOTE_BACKEND = {
+    name: 'remote',
+    isSync: false,
+    init: async function () {
+      await new Promise(function (r) { loadRemoteAccount(r); });
+      const h = await pingRemote();
+      if (h && h.ok) {
+        try { await ensureRemoteAccount(); } catch (e) { /* swallow */ }
+        await Promise.all([refreshRemoteFriends(), refreshRemoteLeaderboard('combo', 'friends'), refreshRemoteLeaderboard('combo', 'global')]);
+      }
+    },
+    getMyAccount: function () {
+      if (!remoteAccount) return { code: '— pending —', username: '', avatar: '⚡', highestCombo: 0, totalChars: 0 };
+      const stats = window.__powerMode.stats ? window.__powerMode.stats.getSnapshot() : null;
+      const profile = (stats && stats.profile) || { username: '', avatar: '⚡' };
+      return {
+        code: remoteAccount.friendCode,
+        username: profile.username || 'you',
+        avatar: profile.avatar || '⚡',
+        highestCombo: stats ? stats.highestCombo || 0 : 0,
+        totalChars: stats ? stats.totalChars || 0 : 0
+      };
+    },
+    addFriendByCode: async function (rawCode) {
+      try {
+        const acc = await ensureRemoteAccount();
+        const res = await apiPost('/api/friends/add', { token: acc.token, code: rawCode });
+        if (res && res.ok) {
+          markRemoteSuccess();
+          await refreshRemoteFriends();
+          await refreshRemoteLeaderboard('combo', 'friends');
+          return { ok: true, friend: res.friend };
+        }
+        return { ok: false, error: (res && res.error) || 'unknown error' };
+      } catch (e) {
+        markRemoteFailure();
+        return { ok: false, error: 'network error — backend unreachable' };
+      }
+    },
+    removeFriend: async function (code) {
+      try {
+        const acc = await ensureRemoteAccount();
+        await apiPost('/api/friends/remove', { token: acc.token, code: code });
+        markRemoteSuccess();
+        await refreshRemoteFriends();
+        return { ok: true };
+      } catch (e) {
+        markRemoteFailure();
+        return { ok: false };
+      }
+    },
+    getFriends: function () {
+      // Synchronous read of cached list with the current user injected so the
+      // stats page shows the "me" row even before the first refresh completes.
+      const me = REMOTE_BACKEND.getMyAccount();
+      const out = [{
+        isMe: true,
+        code: me.code,
+        name: me.username,
+        username: me.username,
+        avatar: me.avatar,
+        highestCombo: me.highestCombo,
+        totalChars: me.totalChars
+      }];
+      (REMOTE_CACHE.friends || []).forEach(function (f) { out.push(f); });
+      return out;
+    },
+    getLeaderboard: function (kind, scope) {
+      const key = kind + '/' + scope;
+      // Kick off a fresh fetch in the background; return cached for immediate paint.
+      refreshRemoteLeaderboard(kind, scope);
+      const rows = (REMOTE_CACHE.leaderboards[key] || []).slice();
+      const field = kind === 'chars' ? 'totalChars' : 'highestCombo';
+      rows.sort(function (a, b) { return (b[field] || 0) - (a[field] || 0); });
+      return rows;
+    },
+    getStatus: function () {
+      return {
+        backend: 'remote',
+        myCode: remoteAccount ? remoteAccount.friendCode : null,
+        friendCount: REMOTE_CACHE.friends.length,
+        createdAt: remoteAccount ? remoteAccount.createdAt : null,
+        online: REMOTE_CACHE.status.online,
+        serverUrl: getRemoteUrl(),
+        serverStorage: REMOTE_CACHE.status.storage || null
+      };
+    },
+    ping: pingRemote,
+    syncStats: syncStatsToRemote,
+    refreshFriends: refreshRemoteFriends,
+    refreshLeaderboard: refreshRemoteLeaderboard,
+    onChange: function (fn) { remoteListeners.push(fn); return function () { remoteListeners = remoteListeners.filter(function (x) { return x !== fn; }); }; }
+  };
+
+  /* ---------- Auto-fallback wrapper ---------- *
+   * Picks remote if backendKind === 'auto' and the server is reachable,
+   * otherwise mock. Re-evaluated when settings change or pings fail.
+   */
+  let activeBackendName = 'local-mock';
+
+  function pickBackend() {
+    const s = window.__powerMode.main && window.__powerMode.main.getSettings();
+    const kind = s && s.backendKind;
+    if (kind === 'local') return MOCK_BACKEND;
+    if (kind === 'remote') return REMOTE_BACKEND;
+    // 'auto': use remote if online, mock otherwise
+    if (REMOTE_CACHE.status.online && remoteFailureCount < 3) return REMOTE_BACKEND;
+    if (remoteFailureCount >= 3) return MOCK_BACKEND;
+    return REMOTE_BACKEND;
+  }
+
+  function backendProxy() {
+    return {
+      get name() { return pickBackend().name; },
+      getMyAccount: function () { return pickBackend().getMyAccount(); },
+      addFriendByCode: function () { const b = pickBackend(); return b.addFriendByCode.apply(b, arguments); },
+      removeFriend: function () { const b = pickBackend(); return b.removeFriend.apply(b, arguments); },
+      getFriends: function () { return pickBackend().getFriends(); },
+      getLeaderboard: function () { const b = pickBackend(); return b.getLeaderboard.apply(b, arguments); },
+      getStatus: function () { return pickBackend().getStatus(); },
+      isRemoteOnline: function () { return !!REMOTE_CACHE.status.online; }
+    };
+  }
+
+  /* ---------- Periodic sync ---------- */
+  let syncTimer = null;
+  function startPeriodicSync() {
+    if (syncTimer) return;
+    syncTimer = setInterval(async function () {
+      const s = window.__powerMode.main && window.__powerMode.main.getSettings();
+      const kind = s ? s.backendKind : 'auto';
+      if (kind === 'local') return;
+      try {
+        await REMOTE_BACKEND.syncStats();
+      } catch (e) { /* swallow */ }
+    }, 15000);
+  }
+
+  /* ---------- Public surface ---------- */
+  const proxy = backendProxy();
+
   window.__powerMode.social = {
-    init: load,
-    backend: MOCK_BACKEND,
+    init: function (cb) {
+      load(async function () {
+        const s = window.__powerMode.main && window.__powerMode.main.getSettings();
+        const kind = s ? s.backendKind : 'auto';
+        if (kind !== 'local') {
+          try { await REMOTE_BACKEND.init(); } catch (e) { /* swallow */ }
+          startPeriodicSync();
+        }
+        if (cb) cb(social);
+      });
+    },
+    backend: proxy,
+    mockBackend: MOCK_BACKEND,
+    remoteBackend: REMOTE_BACKEND,
+    onRemoteChange: function (fn) { return REMOTE_BACKEND.onChange(fn); },
     _generateFriendCode: generateFriendCode,
     _normalizeCode: normalizeCode,
     _formatCode: formatCode,
     _seedFromCode: seedFromCode,
-    _setSocial: function (s) { social = s; loaded = true; }
+    _setSocial: function (s) { social = s; loaded = true; },
+    _pickBackendName: function () { return pickBackend().name; }
   };
 })();

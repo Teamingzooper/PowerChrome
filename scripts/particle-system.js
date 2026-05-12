@@ -195,8 +195,14 @@
       if (!p.alive) continue;
       if (!reduced) {
         if (p._trailsEnabled) {
-          p.trail.push(p.x, p.y);
-          if (p.trail.length > 8) p.trail.splice(0, p.trail.length - 8);
+          const trailLen = Math.max(0, Math.min(12, settings.trailLength != null ? settings.trailLength : 4));
+          if (trailLen > 0) {
+            p.trail.push(p.x, p.y);
+            const cap = trailLen * 2; // each segment uses 2 entries
+            if (p.trail.length > cap) p.trail.splice(0, p.trail.length - cap);
+          } else {
+            p.trail.length = 0;
+          }
         }
         // Imploding particles ignore gravity and decay faster on velocity
         if (p._implode) {

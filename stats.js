@@ -200,11 +200,27 @@
   function renderBackendBanner() {
     const be = getBackend();
     const status = be ? be.getStatus() : { backend: 'unknown' };
-    const isLocal = status.backend === 'local-mock' || status.backend === 'local-only';
-    $('#backendDot').classList.toggle('ok', !isLocal);
-    $('#backendLabel').textContent = isLocal
-      ? 'Local-only mode (' + status.backend + ')'
-      : 'Connected to ' + status.backend;
+    const isRemote = status.backend === 'remote';
+    const online = !!status.online;
+    const dotOK = isRemote && online;
+    $('#backendDot').classList.toggle('ok', dotOK);
+
+    let label, sub;
+    if (!isRemote) {
+      label = 'Local-only mode';
+      sub = 'The social system is fully wired but stays on this device. Friend codes, leaderboards, and accounts are stored in <code>chrome.storage.local</code>. Switch to remote in the popup to share with friends.';
+    } else if (online) {
+      label = 'Connected · ' + (status.serverStorage === 'kv' ? 'persistent' : 'volatile') + ' storage';
+      sub = 'Server: <code>' + (status.serverUrl || '') + '</code>. Storage backend: <strong>' + (status.serverStorage || 'unknown') + '</strong>. ' +
+            (status.serverStorage === 'memory'
+              ? "Data resets when the server cold-starts — link a Vercel KV store in the Vercel dashboard's Storage tab to enable real persistence."
+              : 'Your friend code, friends list, and stats sync automatically every 15 seconds.');
+    } else {
+      label = 'Remote backend unreachable';
+      sub = 'Trying <code>' + (status.serverUrl || '') + '</code> — no response. Falling back to local-only mode. Check the URL in the popup or try again later.';
+    }
+    $('#backendLabel').textContent = label;
+    $('#backendSub').innerHTML = sub;
   }
 
   function renderMyCode() {
@@ -247,8 +263,8 @@
       rm.type = 'button';
       rm.textContent = '×';
       rm.title = 'Remove';
-      rm.addEventListener('click', function () {
-        be.removeFriend(f.code);
+      rm.addEventListener('click', async function () {
+        try { await be.removeFriend(f.code); } catch (e) { /* ignore */ }
         renderFriendList();
         renderLeaderboard();
       });
@@ -410,18 +426,27 @@
       $('#friendError').hidden = true;
     });
 
-    $('#addFriendForm').addEventListener('submit', function (e) {
+    $('#addFriendForm').addEventListener('submit', async function (e) {
       e.preventDefault();
       const be = getBackend();
       if (!be) return;
-      const result = be.addFriendByCode($('#friendCodeInput').value);
-      if (result.ok) {
+      const submitBtn = e.target.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
+      let result;
+      try {
+        result = await be.addFriendByCode($('#friendCodeInput').value);
+      } catch (err) {
+        result = { ok: false, error: 'network error' };
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+      if (result && result.ok) {
         $('#friendCodeInput').value = '';
         $('#friendError').hidden = true;
         renderFriendList();
         renderLeaderboard();
       } else {
-        $('#friendError').textContent = result.error;
+        $('#friendError').textContent = (result && result.error) || 'failed';
         $('#friendError').hidden = false;
       }
     });
@@ -478,6 +503,18 @@
         renderAll();
         bind();
         diagInterval = setInterval(renderDiagnostics, 5000);
+
+        // Re-render any time the remote backend gets fresh data or its
+        // connectivity flips on/off.
+        if (window.__powerMode.social && window.__powerMode.social.onRemoteChange) {
+          window.__powerMode.social.onRemoteChange(function () {
+            renderBackendBanner();
+            renderMyCode();
+            renderFriendList();
+            renderLeaderboard();
+            renderDiagnostics();
+          });
+        }
       });
     });
   });

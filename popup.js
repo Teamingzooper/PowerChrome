@@ -34,6 +34,13 @@ const DEFAULTS = {
   floatInChars: false,
   spamDetection: true,
   debugMode: false,
+  selectionEffects: true,
+  comboBar: true,
+  comboBarStyle: 'thin',
+  trailLength: 4,
+  clickEffects: false,
+  backendKind: 'auto',
+  backendUrl: '',
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -429,6 +436,16 @@ function refresh() {
   $('#floatInChars').checked = !!state.floatInChars;
   $('#spamDetection').checked = !!state.spamDetection;
   $('#debugMode').checked = !!state.debugMode;
+  $('#selectionEffects').checked = !!state.selectionEffects;
+  $('#comboBar').checked = !!state.comboBar;
+  $('#clickEffects').checked = !!state.clickEffects;
+  $('#trailLength').value = state.trailLength;
+  $('#trailLengthVal').textContent = state.trailLength;
+  $('#backendKind').value = state.backendKind || 'auto';
+  $('#backendUrl').value = state.backendUrl || '';
+  $$('#comboBarStyleChips button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.style === state.comboBarStyle);
+  });
 
   $$('#presetChips button').forEach(function (b) {
     b.classList.toggle('active', b.dataset.preset === state.preset);
@@ -455,6 +472,22 @@ function bindBasics() {
   bindCheckbox('floatInChars', 'floatInChars');
   bindCheckbox('spamDetection', 'spamDetection');
   bindCheckbox('debugMode', 'debugMode');
+  bindCheckbox('selectionEffects', 'selectionEffects');
+  bindCheckbox('comboBar', 'comboBar');
+  bindCheckbox('clickEffects', 'clickEffects');
+  bindSelect('backendKind', 'backendKind');
+  bindRangeInt('trailLength', 'trailLength', 'trailLengthVal');
+  $('#backendUrl').addEventListener('change', function (e) {
+    state.backendUrl = (e.target.value || '').trim();
+    save();
+  });
+  $$('#comboBarStyleChips button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      state.comboBarStyle = b.dataset.style;
+      $$('#comboBarStyleChips button').forEach(function (x) { x.classList.toggle('active', x === b); });
+      save();
+    });
+  });
 
   bindSelect('colorScheme', 'colorScheme', updateCustomColorsVisibility);
   bindSelect('soundPack', 'soundPack');
