@@ -12,7 +12,7 @@
     <div class="brand">
       <span class="logo">⚡</span>
       <h1>PowerChrome</h1>
-      <span class="version">v1.2.0</span>
+      <span class="version" id="versionTag">v—</span>
     </div>
     <div class="profile" id="profile">
       <button class="avatar" id="avatarBtn" type="button" title="Change avatar">⚡</button>
@@ -131,7 +131,7 @@
         <button id="copyCode" class="small" type="button">Copy</button>
         <span class="copy-feedback" id="copyFeedback" hidden>Copied ✓</span>
       </div>
-      <p class="hint">Share this code with a friend so they can add you. (In local-only mode each code is treated as a synthetic profile — totally safe to experiment with.)</p>
+      <p class="hint">Share this code with a friend so they can add you on any device running PowerChrome. Codes are real accounts on the cloud backend — leaderboards and activity feeds update for everyone.</p>
 
       <h2 class="card-title" style="margin-top:18px">Add a friend</h2>
       <form class="add-friend" id="addFriendForm" autocomplete="off">
@@ -158,13 +158,12 @@
         </div>
         <div class="seg" data-seg="scope">
           <button data-val="friends" class="active" type="button">Friends</button>
-          <button data-val="global" type="button">Global (mock)</button>
+          <button data-val="global" type="button">Global</button>
         </div>
       </div>
       <ol class="lb-list big" id="lbList"></ol>
       <p class="hint" id="lbHint">
-        "Global" is currently a synthetic local-only leaderboard so the UI is testable.
-        When a real backend ships, the same view shows real users.
+        Live leaderboard, refreshed when stats sync (~15 s). The "me" row shows your latest synced numbers.
       </p>
     </section>
 

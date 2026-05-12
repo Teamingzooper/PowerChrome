@@ -384,7 +384,9 @@
 
   async function apiHealth() {
     const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const timeout = setTimeout(function () { if (ctrl) ctrl.abort(); }, 4000);
+    // Generous timeout — Vercel's first-cold-start can comfortably take 5–7 s
+    // and we don't want to flap the banner to "offline" because of it.
+    const timeout = setTimeout(function () { if (ctrl) ctrl.abort(); }, 12000);
     try {
       const res = await fetch(apiUrl('/api/health'), { signal: ctrl ? ctrl.signal : undefined });
       clearTimeout(timeout);
@@ -418,6 +420,10 @@
     return remoteAccount;
   }
 
+  function tryParse(s) {
+    try { return JSON.parse(s); } catch (e) { return {}; }
+  }
+
   function markRemoteFailure() {
     remoteFailureCount++;
     REMOTE_CACHE.status.online = false;
@@ -427,6 +433,16 @@
     remoteFailureCount = 0;
     REMOTE_CACHE.status.online = true;
     notifyRemote();
+  }
+
+  /* Only counts network-level / 5xx failures as "offline". 4xx means the
+   * server is alive and answered — we just sent a bad request or have a
+   * stale token (handled separately by handleOrphanedAccount).
+   */
+  function markRemoteFailureMaybe(err) {
+    const status = err && err.status;
+    if (typeof status === 'number' && status >= 400 && status < 500) return;
+    markRemoteFailure();
   }
 
   async function pingRemote() {
@@ -456,7 +472,7 @@
       });
       markRemoteSuccess();
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
     }
   }
 
@@ -477,7 +493,7 @@
       if (res && res.ok) { markRemoteSuccess(); return { ok: true }; }
       return { ok: false };
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
       return { ok: false };
     }
   }
@@ -491,7 +507,7 @@
         markRemoteSuccess();
       }
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
     }
     return REMOTE_CACHE.feed || [];
   }
@@ -514,7 +530,7 @@
       if (res && res.ok) { lastPushedSettingsHash = h; markRemoteSuccess(); return { ok: true }; }
       return { ok: false };
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
       return { ok: false };
     }
   }
@@ -528,7 +544,7 @@
       if (res && res.ok) { markRemoteSuccess(); return res; }
       return null;
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
       return null;
     }
   }
@@ -567,7 +583,7 @@
       }
       return { ok: false, error: (res && res.error) || 'unknown' };
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
       return { ok: false, error: 'network' };
     }
   }
@@ -583,7 +599,7 @@
         markRemoteSuccess();
       }
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
     }
     return REMOTE_CACHE.friends;
   }
@@ -605,7 +621,7 @@
         markRemoteSuccess();
       }
     } catch (e) {
-      markRemoteFailure();
+      markRemoteFailureMaybe(e);
     }
     return REMOTE_CACHE.leaderboards[key] || [];
   }
@@ -668,8 +684,12 @@
         }
         return { ok: false, error: (res && res.error) || 'unknown error' };
       } catch (e) {
-        markRemoteFailure();
-        return { ok: false, error: 'network error — backend unreachable' };
+        markRemoteFailureMaybe(e);
+        const status = e && e.status;
+        const msg = (typeof status === 'number' && status >= 400 && status < 500)
+          ? (e.payload && tryParse(e.payload).error) || 'request rejected'
+          : 'network error — backend unreachable';
+        return { ok: false, error: msg };
       }
     },
     removeFriend: async function (code) {
@@ -680,7 +700,7 @@
         await refreshRemoteFriends();
         return { ok: true };
       } catch (e) {
-        markRemoteFailure();
+        markRemoteFailureMaybe(e);
         return { ok: false };
       }
     },
@@ -771,6 +791,7 @@
 
   /* ---------- Periodic sync ---------- */
   let syncTimer = null;
+  let healTimer = null;
   function startPeriodicSync() {
     if (syncTimer) return;
     syncTimer = setInterval(async function () {
@@ -781,6 +802,27 @@
         await REMOTE_BACKEND.syncStats();
       } catch (e) { /* swallow */ }
     }, 15000);
+    // Heartbeat: if we're currently offline, retry the health check every 30 s
+    // so a transient cold-start or network blip self-heals without a reload.
+    healTimer = setInterval(async function () {
+      const s = window.__powerMode.main && window.__powerMode.main.getSettings();
+      const kind = s ? s.backendKind : 'auto';
+      if (kind === 'local') return;
+      if (REMOTE_CACHE.status.online) return;
+      try {
+        const h = await pingRemote();
+        if (h && h.ok) {
+          // Healed — pull fresh data so the UI updates.
+          try { await ensureRemoteAccount(); } catch (e) { /* ignore */ }
+          await Promise.all([
+            refreshRemoteFriends(),
+            refreshRemoteLeaderboard('combo', 'friends'),
+            refreshRemoteLeaderboard('combo', 'global'),
+            refreshActivityFeed()
+          ]);
+        }
+      } catch (e) { /* swallow */ }
+    }, 30000);
   }
 
   /* ---------- Public surface ---------- */

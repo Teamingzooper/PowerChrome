@@ -1,6 +1,15 @@
 (function () {
   const STATS_KEY = 'powerModeStats';
 
+  function readVersion() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) {
+        return chrome.runtime.getManifest().version || '?';
+      }
+    } catch (e) { /* ignore */ }
+    return '?';
+  }
+
   const AVATAR_CHOICES = [
     '⚡','🔥','💥','✨','🌟','🚀','🎮','🎯','🎨','🎵','🎸','🎲',
     '🧠','🦾','🤖','👾','🐉','🦊','🐱','🐺','🐧','🦉','🦋','🐙',
@@ -480,11 +489,14 @@
     const audio = snap ? snap.audioBackend : 'n/a';
     const worklet = snap ? snap.audioWorkletSupported : (typeof AudioWorkletNode !== 'undefined');
     const social = PM.social && PM.social.backend ? PM.social.backend.getStatus() : { backend: 'n/a' };
+    // Audio module isn't loaded on the stats page — show "n/a" not "none".
+    const audioForDisplay = (audio === 'none' || !audio) ? 'n/a (content scripts only)' : audio;
+    const audioClass = audio === 'worklet' ? 'ok' : (audio === 'scriptProcessor' ? 'warn' : '');
     const entries = [
-      ['extension', '1.3.0'],
-      ['audio backend', audio, audio === 'worklet' ? 'ok' : (audio === 'scriptProcessor' ? 'warn' : '')],
+      ['extension', readVersion()],
+      ['audio backend', audioForDisplay, audioClass],
       ['AudioWorkletNode', worklet ? 'supported' : 'unsupported', worklet ? 'ok' : 'warn'],
-      ['social backend', social.backend, social.backend === 'local-mock' ? 'warn' : 'ok'],
+      ['social backend', social.backend, social.backend === 'remote' ? 'ok' : 'warn'],
       ['friend code', social.myCode || '—'],
       ['account created', social.createdAt ? new Date(social.createdAt).toLocaleString() : '—']
     ];
@@ -672,6 +684,10 @@
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    // Stamp the live extension version into the header chip.
+    const vEl = document.getElementById('versionTag');
+    if (vEl) vEl.textContent = 'v' + readVersion();
+
     load(function () {
       // Prime stats-tracker with our loaded data so social-api sees real numbers
       if (window.__powerMode && window.__powerMode.stats) {
