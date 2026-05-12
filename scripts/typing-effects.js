@@ -121,10 +121,104 @@
     });
   }
 
+  /* ---------- Word + sentence detection ---------- */
+  const WORD_BREAK_RE = /^[\s,;:–—/\\()\[\]{}"'`]$/;
+  const SENTENCE_END_RE = /^[.!?]$/;
+  let wordBuffer = '';
+
+  function onCharKey(key) {
+    if (!key || key.length !== 1) return null;
+    if (SENTENCE_END_RE.test(key)) {
+      const had = wordBuffer.length > 0;
+      const len = wordBuffer.length;
+      wordBuffer = '';
+      return { kind: 'sentence', length: len + 1, hadWord: had };
+    }
+    if (WORD_BREAK_RE.test(key)) {
+      if (wordBuffer.length === 0) return null;
+      const len = wordBuffer.length;
+      wordBuffer = '';
+      return { kind: 'word', length: len };
+    }
+    wordBuffer += key;
+    return null;
+  }
+
+  function onDeleteChar() {
+    wordBuffer = wordBuffer.slice(0, -1);
+  }
+
+  function onEnterKey() {
+    if (wordBuffer.length === 0) return null;
+    const len = wordBuffer.length;
+    wordBuffer = '';
+    return { kind: 'sentence', length: len, hadWord: true, viaEnter: true };
+  }
+
+  function resetWordBuffer() { wordBuffer = ''; }
+  function _getWordBuffer() { return wordBuffer; }
+
+  function spawnWordEffect(x, y) {
+    const particles = window.__powerMode.particles;
+    if (!particles) return;
+    const settings = getSettings();
+    if (!settings.wordEffects) return;
+    const a11y = window.__powerMode.accessibility;
+    const reduced = (a11y && a11y.prefersReducedMotion()) || settings.reducedMotion;
+    if (reduced) return;
+    const presets = window.__powerMode.presets;
+    const palette = presets ? presets.getColorScheme(settings.colorScheme || 'rainbow') : ['#ffffff'];
+    particles.spawn(x, y, {
+      count: 6,
+      palette: palette.concat(['#ffffff']),
+      angle: -Math.PI / 2,
+      speed: 4,
+      baseSize: 2,
+      life: 500
+    });
+  }
+
+  function spawnSentenceEffect(x, y) {
+    const particles = window.__powerMode.particles;
+    if (!particles) return;
+    const settings = getSettings();
+    if (!settings.sentenceEffects) return;
+    const a11y = window.__powerMode.accessibility;
+    const reduced = (a11y && a11y.prefersReducedMotion()) || settings.reducedMotion;
+    if (reduced) return;
+    const presets = window.__powerMode.presets;
+    const palette = presets ? presets.getColorScheme(settings.colorScheme || 'rainbow') : ['#ffffff'];
+    particles.spawn(x, y, {
+      count: 18,
+      palette: palette,
+      speed: 7,
+      baseSize: 4,
+      life: 900
+    });
+    // Subtle flash to mark the end of a sentence
+    const el = ensureFlashEl();
+    el.style.transition = 'opacity .04s linear';
+    el.style.opacity = '0.10';
+    requestAnimationFrame(function () {
+      requestAnimationFrame(function () {
+        el.style.transition = 'opacity .3s ease-out';
+        el.style.opacity = '0';
+      });
+    });
+    if (window.__powerMode.vfx) window.__powerMode.vfx.shake(3);
+  }
+
   window.__powerMode.typingFx = {
     flashEnter: flashEnter,
     spawnCarriageReturnParticles: spawnCarriageReturnParticles,
     floatChar: floatChar,
-    _ensureFlashEl: ensureFlashEl
+    onCharKey: onCharKey,
+    onDeleteChar: onDeleteChar,
+    onEnterKey: onEnterKey,
+    spawnWordEffect: spawnWordEffect,
+    spawnSentenceEffect: spawnSentenceEffect,
+    resetWordBuffer: resetWordBuffer,
+    _ensureFlashEl: ensureFlashEl,
+    _getWordBuffer: _getWordBuffer
   };
 })();

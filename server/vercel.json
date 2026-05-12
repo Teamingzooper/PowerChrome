@@ -3,5 +3,9 @@
   "framework": null,
   "buildCommand": null,
   "outputDirectory": null,
-  "installCommand": "npm install --omit=dev || true"
+  "installCommand": "npm install --omit=dev || true",
+  "rewrites": [
+    { "source": "/u/:code", "destination": "/u.html" },
+    { "source": "/u/:code/", "destination": "/u.html" }
+  ]
 }

@@ -61,7 +61,32 @@
           <div class="stat-value" id="statTotalPastes">0</div>
           <div class="stat-sub" id="statPasteCharsSub">chars eased in</div>
         </div>
+        <div class="stat">
+          <div class="stat-label">Peak WPM</div>
+          <div class="stat-value" id="statPeakWpm">0</div>
+          <div class="stat-sub" id="statPeakWpmSub">10-second window</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Words / sentences</div>
+          <div class="stat-value" id="statWords">0</div>
+          <div class="stat-sub" id="statSentencesSub">0 sentences</div>
+        </div>
       </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Hour of day</h2>
+      <div class="hour-chart" id="hourChart"></div>
+      <div class="chart-legend">
+        <span id="hourMost">— most active hour</span>
+        <span id="hourTotal">0 chars · 24 hour buckets</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">Achievements</h2>
+      <div class="achievement-summary" id="achievementSummary">0 / 0 unlocked</div>
+      <div class="achievements" id="achievementGrid"></div>
     </section>
 
     <section class="card">
@@ -119,6 +144,11 @@
       <ul class="friend-list" id="friendList"></ul>
     </section>
 
+    <section class="card">
+      <h2 class="card-title">Friend activity</h2>
+      <ul class="feed" id="activityFeed"></ul>
+    </section>
+
     <section class="card leaderboard">
       <h2 class="card-title">Leaderboards</h2>
       <div class="lb-controls">
@@ -157,7 +187,9 @@
   </footer>
 
   <!-- Same modules content scripts use — they self-attach to window.__powerMode -->
+  <script src="scripts/wpm-tracker.js"></script>
   <script src="scripts/stats-tracker.js"></script>
+  <script src="scripts/achievements.js"></script>
   <script src="scripts/social-api.js"></script>
   <script src="scripts/debug-tools.js"></script>
   <script src="stats.js"></script>

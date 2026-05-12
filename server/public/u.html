@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PowerChrome — Profile</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at top, #1a213d 0%, #07090f 60%) fixed;
+    color: #e7ecf2;
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  }
+  main { max-width: 720px; margin: 0 auto; padding: 56px 24px 80px; }
+  .header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 24px;
+  }
+  .brand {
+    display: flex; align-items: center; gap: 10px;
+    color: #95a0b4; font-size: 13px; text-decoration: none;
+  }
+  .brand strong {
+    background: linear-gradient(90deg, #7c5cff, #00d4ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 700;
+  }
+  .card {
+    background: linear-gradient(180deg, #161b2a, #0e121d);
+    border: 1px solid #2a2f3d;
+    border-radius: 16px;
+    padding: 28px;
+    box-shadow: 0 16px 40px rgba(0,0,0,.4);
+  }
+  .profile-hero {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .avatar {
+    width: 80px; height: 80px;
+    border-radius: 20px;
+    background: linear-gradient(135deg, rgba(124,92,255,.35), rgba(0,212,255,.35));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 44px;
+    border: 1px solid #3a4054;
+    flex-shrink: 0;
+  }
+  .name-block { flex: 1; min-width: 200px; }
+  .name {
+    font-size: 28px;
+    font-weight: 700;
+    margin: 0 0 4px;
+  }
+  .code {
+    font: 14px ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #00d4ff;
+    letter-spacing: .12em;
+    user-select: all;
+  }
+  .since { color: #6b7488; font-size: 12px; margin-top: 6px; }
+  .share-btn {
+    background: linear-gradient(90deg, #7c5cff, #00d4ff);
+    color: #0b0d13;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 16px;
+    font: 600 13px/1 -apple-system, sans-serif;
+    cursor: pointer;
+    transition: transform .12s ease;
+  }
+  .share-btn:hover { transform: scale(1.04); }
+  .copied { color: #34c759; font-size: 12px; margin-left: 6px; }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+  }
+  @media (max-width: 540px) { .stats { grid-template-columns: 1fr; } }
+  .stat {
+    background: #1f2535;
+    border: 1px solid #2a2f3d;
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .08em;
+    color: #95a0b4; margin-bottom: 4px;
+  }
+  .stat-val {
+    font: 700 24px/1.05 ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: linear-gradient(90deg, #7c5cff, #00d4ff);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+
+  h2 {
+    margin: 28px 0 12px;
+    font-size: 11px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: .12em; color: #95a0b4;
+  }
+  .events {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .event {
+    display: grid;
+    grid-template-columns: 30px 1fr auto;
+    gap: 10px;
+    align-items: center;
+    background: #1f2535;
+    border: 1px solid #2a2f3d;
+    border-radius: 8px;
+    padding: 8px 12px;
+    font: 13px ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .event .ic { font-size: 18px; text-align: center; }
+  .event .name { color: #e7ecf2; font-family: -apple-system, sans-serif; }
+  .event .when { color: #6b7488; font-size: 11px; }
+  .events:empty::before {
+    content: "(no recent activity)";
+    color: #6b7488; font-style: italic; padding: 4px;
+  }
+
+  .install {
+    margin-top: 32px;
+    text-align: center;
+    color: #95a0b4;
+    font-size: 13px;
+  }
+  .install a {
+    color: #00d4ff; text-decoration: none; font-weight: 600;
+  }
+  .install a:hover { text-decoration: underline; }
+
+  .error {
+    text-align: center;
+    padding: 56px 24px;
+    color: #ff9f0a;
+  }
+  .error h2 { color: #ff9f0a; margin: 0 0 8px; font-size: 20px; text-transform: none; letter-spacing: 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="header-row">
+    <a class="brand" href="/">
+      <span style="font-size:22px;filter:drop-shadow(0 0 12px rgba(124,92,255,.55))">⚡</span>
+      <span><strong>PowerChrome</strong> profile</span>
+    </a>
+    <a class="brand" href="https://github.com/Teamingzooper/PowerChrome">GitHub →</a>
+  </div>
+
+  <div id="loaded" hidden>
+    <div class="card">
+      <div class="profile-hero">
+        <div class="avatar" id="avatar">⚡</div>
+        <div class="name-block">
+          <h1 class="name" id="name">—</h1>
+          <div class="code" id="code">— — — —</div>
+          <div class="since" id="since"></div>
+        </div>
+        <div>
+          <button class="share-btn" id="shareBtn">Copy share link</button>
+          <span class="copied" id="copied" hidden>Copied ✓</span>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="stat-label">Highest combo</div><div class="stat-val" id="statCombo">0</div></div>
+        <div class="stat"><div class="stat-label">Characters typed</div><div class="stat-val" id="statChars">0</div></div>
+        <div class="stat"><div class="stat-label">Backspaces</div><div class="stat-val" id="statDeletes">0</div></div>
+        <div class="stat"><div class="stat-label">Returns pressed</div><div class="stat-val" id="statEnters">0</div></div>
+      </div>
+
+      <h2>Recent activity</h2>
+      <div class="events" id="events"></div>
+    </div>
+
+    <div class="install">
+      Want particle explosions on every keystroke too?
+      <a href="https://github.com/Teamingzooper/PowerChrome/releases/latest">Install PowerChrome</a>,
+      then paste this code into <strong>More → Open stats → Add a friend</strong>: <code id="addCode" style="background:#1f2535;border:1px solid #2a2f3d;border-radius:4px;padding:2px 6px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace">—</code>
+    </div>
+  </div>
+
+  <div id="errorBlock" class="error" hidden>
+    <h2>Profile not found</h2>
+    <p id="errorText">That friend code doesn't match any active PowerChrome account.</p>
+    <p><a href="/" style="color:#00d4ff">Back to API home →</a></p>
+  </div>
+</main>
+
+<script>
+(async function () {
+  const path = location.pathname;
+  const m = path.match(/^\/u\/?([A-Za-z0-9-]+)\/?$/);
+  const code = m ? m[1].toUpperCase() : (new URLSearchParams(location.search)).get('code');
+  const errorBlock = document.getElementById('errorBlock');
+  const errorText = document.getElementById('errorText');
+  const loaded = document.getElementById('loaded');
+
+  function fmtCode(c) {
+    if (!c) return '';
+    const n = c.replace(/-/g, '');
+    return n.length === 8 ? n.slice(0,4) + '-' + n.slice(4,8) : c;
+  }
+  function fmtInt(n) { return (n || 0).toLocaleString('en-US'); }
+  function ago(iso) {
+    if (!iso) return '';
+    const ms = Date.now() - new Date(iso).getTime();
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return 'just now';
+    if (min < 60) return min + 'm ago';
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return hr + 'h ago';
+    return Math.floor(hr / 24) + 'd ago';
+  }
+  function eventIcon(e) {
+    if (e.type === 'achievement') return '🏆';
+    if (e.type === 'milestone') {
+      const map = { fireworks:'🎆', galaxy:'🌌', tornado:'🌪️', supernova:'💥', blackhole:'🕳️', bigbang:'🌠', universe:'♾️' };
+      return map[(e.payload && e.payload.name) || ''] || '⭐';
+    }
+    if (e.type === 'combo-high') return '🔥';
+    return '✨';
+  }
+  function eventLabel(e) {
+    if (e.type === 'achievement') return 'Unlocked ' + (e.payload && e.payload.name || 'an achievement');
+    if (e.type === 'milestone') return 'Hit ' + (e.payload && e.payload.name || 'a milestone');
+    if (e.type === 'combo-high') return 'New personal-best combo: ' + (e.payload && e.payload.count || 0) + '×';
+    return e.type;
+  }
+
+  if (!code) {
+    errorBlock.hidden = false;
+    errorText.textContent = 'No friend code in the URL. Try https://powerchrome-api.vercel.app/u/ABCD-EFGH';
+    return;
+  }
+  try {
+    const res = await fetch('/api/profile/get?code=' + encodeURIComponent(code), { cache: 'no-store' });
+    const data = await res.json();
+    if (!data || !data.ok) {
+      errorBlock.hidden = false;
+      if (data && data.error === 'not-found') {
+        errorText.textContent = "Code " + fmtCode(code) + " doesn't match any active PowerChrome account.";
+      } else {
+        errorText.textContent = (data && data.error) || ('http ' + res.status);
+      }
+      return;
+    }
+    const p = data.profile;
+    loaded.hidden = false;
+    document.getElementById('avatar').textContent = p.avatar || '⚡';
+    document.getElementById('name').textContent = p.username || 'player';
+    document.getElementById('code').textContent = fmtCode(p.code);
+    document.getElementById('addCode').textContent = fmtCode(p.code);
+    if (data.createdAt) document.getElementById('since').textContent = 'Joined ' + ago(data.createdAt);
+    document.getElementById('statCombo').textContent = fmtInt(p.highestCombo);
+    document.getElementById('statChars').textContent = fmtInt(p.totalChars);
+    document.getElementById('statDeletes').textContent = fmtInt(p.totalDeletes);
+    document.getElementById('statEnters').textContent = fmtInt(p.totalEnters);
+
+    document.title = '⚡ ' + (p.username || 'player') + ' — PowerChrome';
+
+    const eventsEl = document.getElementById('events');
+    (data.recentEvents || []).forEach(function (e) {
+      const row = document.createElement('div');
+      row.className = 'event';
+      const ic = document.createElement('span'); ic.className = 'ic'; ic.textContent = eventIcon(e);
+      const nm = document.createElement('span'); nm.className = 'name'; nm.textContent = eventLabel(e);
+      const wn = document.createElement('span'); wn.className = 'when'; wn.textContent = ago(e.ts);
+      row.appendChild(ic); row.appendChild(nm); row.appendChild(wn);
+      eventsEl.appendChild(row);
+    });
+
+    document.getElementById('shareBtn').addEventListener('click', function () {
+      const url = location.origin + '/u/' + fmtCode(p.code);
+      try { navigator.clipboard.writeText(url); } catch (e) { /* clipboard may be denied */ }
+      const c = document.getElementById('copied');
+      c.hidden = false;
+      setTimeout(function () { c.hidden = true; }, 1500);
+    });
+  } catch (e) {
+    errorBlock.hidden = false;
+    errorText.textContent = 'Failed to load profile: ' + (e.message || e);
+  }
+})();
+</script>
+</body>
+</html>

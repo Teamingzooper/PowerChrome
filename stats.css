@@ -541,6 +541,139 @@ button.small:hover { border-color: var(--accent); color: var(--fg); }
 .lb-list.big .lb-val { color: var(--accent-2); font-weight: 600; }
 .lb-list.big li.lb-me .lb-name { color: var(--accent-2); }
 
+/* ---------- Hour-of-day chart ---------- */
+.hour-chart {
+  display: grid;
+  grid-template-columns: repeat(24, 1fr);
+  gap: 3px;
+  height: 110px;
+  align-items: end;
+  padding-top: 6px;
+  border-bottom: 1px dashed var(--border);
+}
+.hour-chart .h {
+  position: relative;
+  background: linear-gradient(180deg, var(--accent), var(--accent-2));
+  border-radius: 3px 3px 0 0;
+  min-height: 2px;
+  transition: filter .15s ease;
+}
+.hour-chart .h.empty { background: var(--bg-4); opacity: .35; }
+.hour-chart .h.active-now { box-shadow: 0 0 0 2px rgba(124,92,255,.45); }
+.hour-chart .h:hover { filter: brightness(1.4); }
+.hour-chart .h:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translate(-50%, -6px);
+  white-space: nowrap;
+  background: var(--bg-4);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 4px 8px;
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--fg);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* ---------- Achievements ---------- */
+.achievement-summary {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+.achievements {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+.achieve {
+  background: var(--bg-4);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  position: relative;
+  min-height: 64px;
+  transition: border-color .15s ease, transform .15s ease;
+}
+.achieve.unlocked {
+  border-color: rgba(124,92,255,.45);
+  background: linear-gradient(180deg, rgba(124,92,255,.16), rgba(0,212,255,.06));
+}
+.achieve.locked { opacity: .55; }
+.achieve.unlocked:hover { transform: translateY(-2px); }
+.achieve .ic {
+  font-size: 28px;
+  flex-shrink: 0;
+  filter: grayscale(80%) brightness(0.7);
+  transition: filter .25s ease;
+}
+.achieve.unlocked .ic { filter: none; }
+.achieve .body { flex: 1; min-width: 0; }
+.achieve .name {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.achieve .desc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.achieve .when {
+  position: absolute;
+  bottom: 6px;
+  right: 10px;
+  font: 9px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--dim);
+}
+
+/* ---------- Friend activity feed ---------- */
+.feed { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.feed:empty::before {
+  content: "(no friend activity yet — add a friend to see their unlocks here)";
+  color: var(--dim);
+  font-style: italic;
+  font-size: 12px;
+}
+.feed-row {
+  display: grid;
+  grid-template-columns: 36px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  background: var(--bg-4);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+.feed-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, rgba(124,92,255,.3), rgba(0,212,255,.3));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  border: 1px solid var(--border-strong);
+}
+.feed-text { font-size: 13px; }
+.feed-text strong { color: var(--fg); }
+.feed-text .what { color: var(--muted); }
+.feed-when {
+  font: 11px ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--dim);
+}
+
 /* ---------- Diagnostics ---------- */
 .diag-grid {
   display: grid;

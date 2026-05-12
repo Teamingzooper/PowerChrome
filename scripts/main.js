@@ -43,6 +43,11 @@
     clickEffects: false,
     backendKind: 'auto',
     backendUrl: '',
+    theme: '',
+    wordEffects: true,
+    sentenceEffects: true,
+    wpmIndicator: false,
+    syncSettings: false,
     milestones: {
       fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
       galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -390,13 +395,30 @@
     if (enterMode && tfx) {
       tfx.flashEnter();
       tfx.spawnCarriageReturnParticles(pos.x, pos.y);
+      const enterResult = tfx.onEnterKey();
+      if (enterResult) {
+        if (stats) stats.recordSentence();
+        tfx.spawnSentenceEffect(pos.x, pos.y);
+      }
+    } else if (deleteMode && tfx) {
+      tfx.onDeleteChar();
+    } else if (tfx && e.key && e.key.length === 1) {
+      tfx.floatChar(e.key, pos.x, pos.y);
+      const wordResult = tfx.onCharKey(e.key);
+      if (wordResult && wordResult.kind === 'word') {
+        if (stats) stats.recordWord();
+        tfx.spawnWordEffect(pos.x, pos.y);
+      } else if (wordResult && wordResult.kind === 'sentence') {
+        if (stats) {
+          if (wordResult.hadWord) stats.recordWord();
+          stats.recordSentence();
+        }
+        tfx.spawnSentenceEffect(pos.x, pos.y);
+      }
     }
     if (window.__powerMode.debug) {
       const tag = deleteMode ? 'delete' : (enterMode ? 'enter' : (spammed ? 'spam' : 'key'));
       window.__powerMode.debug.log(tag, e.key + ' @ ' + Math.round(pos.x) + ',' + Math.round(pos.y) + ' combo=' + combo);
-    }
-    if (!deleteMode && !enterMode && tfx && e.key && e.key.length === 1) {
-      tfx.floatChar(e.key, pos.x, pos.y);
     }
   }
 
@@ -454,6 +476,7 @@
     }
     if (window.__powerMode.vfx) window.__powerMode.vfx.tick();
     if (window.__powerMode.debug) window.__powerMode.debug.tick();
+    if (window.__powerMode.wpm) window.__powerMode.wpm.tick();
 
     requestAnimationFrame(frame);
   }
@@ -496,6 +519,18 @@
         const k = enumKeys[i];
         if (prev[k] !== settings[k]) ml.observe(k, settings[k]);
       }
+    }
+    // Push settings to the backend when sync is enabled. Skip transient/per-device
+    // fields so different machines can still have different backendUrl etc.
+    if (settings.syncSettings && window.__powerMode.social && window.__powerMode.social.remoteBackend) {
+      try {
+        const slim = Object.assign({}, settings);
+        delete slim.backendUrl;
+        delete slim.backendKind;
+        delete slim.syncSettings;
+        delete slim.debugMode;
+        window.__powerMode.social.remoteBackend.pushSettings(slim);
+      } catch (e) { /* ignore */ }
     }
   }
 

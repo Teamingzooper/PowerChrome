@@ -9,12 +9,17 @@
     totalPastes: 0,
     totalPasteChars: 0,
     totalEnters: 0,
+    totalWords: 0,
+    totalSentences: 0,
     highestCombo: 0,
     longestStreakMs: 0,
     totalActiveMs: 0,
+    wpmPeak: 0,
     charsPerDay: {},
     charsBySite: {},
+    charsByHour: {},          // { '0'..'23': count }
     milestonesHit: {},
+    achievements: {},         // { id: { unlockedAt: ISO } }
     firstUseDate: '',
     lastUseDate: ''
   };
@@ -47,7 +52,9 @@
     if (!stats.profile) stats.profile = { username: '', avatar: '⚡' };
     if (!stats.charsPerDay) stats.charsPerDay = {};
     if (!stats.charsBySite) stats.charsBySite = {};
+    if (!stats.charsByHour) stats.charsByHour = {};
     if (!stats.milestonesHit) stats.milestonesHit = {};
+    if (!stats.achievements) stats.achievements = {};
     if (!stats.firstUseDate) stats.firstUseDate = isoDate();
     stats.lastUseDate = isoDate();
     // Trim per-day map to last 60 entries to avoid unbounded growth
@@ -68,11 +75,18 @@
     }
   }
 
+  function seedWpmPeak() {
+    if (window.__powerMode.wpm && stats && stats.wpmPeak) {
+      window.__powerMode.wpm.setPeak(stats.wpmPeak);
+    }
+  }
+
   function load(cb) {
     if (!hasChromeStorage()) {
       stats = cloneDefaults();
       ensureStructure();
       loaded = true;
+      seedWpmPeak();
       if (cb) cb(stats);
       return;
     }
@@ -82,19 +96,26 @@
         stats = stored && typeof stored === 'object' ? Object.assign(cloneDefaults(), stored) : cloneDefaults();
         ensureStructure();
         loaded = true;
+        seedWpmPeak();
         if (cb) cb(stats);
       });
     } catch (e) {
       stats = cloneDefaults();
       ensureStructure();
       loaded = true;
+      seedWpmPeak();
       if (cb) cb(stats);
     }
   }
 
   function maybeSave(force) {
-    if (!hasChromeStorage()) return;
     if (!stats) return;
+    // Always nudge the achievement checker so unlocks fire promptly even when
+    // chrome.storage isn't available (e.g. tests).
+    if (window.__powerMode.achievements && window.__powerMode.achievements.scheduleCheck) {
+      window.__powerMode.achievements.scheduleCheck();
+    }
+    if (!hasChromeStorage()) return;
     const now = performance.now();
     if (!force && now - lastSaveAt < 2000) return;
     if (!dirty && !force) return;
@@ -140,6 +161,21 @@
     stats.charsBySite[k] = (stats.charsBySite[k] || 0) + n;
   }
 
+  function bumpHour(n) {
+    const h = String(new Date().getHours());
+    stats.charsByHour[h] = (stats.charsByHour[h] || 0) + n;
+  }
+
+  function syncPeakWpm() {
+    const w = window.__powerMode.wpm;
+    if (!w) return;
+    const live = w.getPeak();
+    if (live > (stats.wpmPeak || 0)) {
+      stats.wpmPeak = live;
+      dirty = true;
+    }
+  }
+
   function recordChar() {
     if (!loaded || !stats) return;
     ensureStructure();
@@ -147,8 +183,42 @@
     stats.totalChars++;
     bumpDay(1);
     bumpSite(1);
+    bumpHour(1);
+    // Forward into wpm tracker for live + peak
+    if (window.__powerMode.wpm) {
+      window.__powerMode.wpm.recordChar();
+      syncPeakWpm();
+    }
     dirty = true;
     maybeSave(false);
+  }
+
+  function recordWord() {
+    if (!loaded || !stats) return;
+    ensureStructure();
+    stats.totalWords++;
+    dirty = true;
+    maybeSave(false);
+  }
+
+  function recordSentence() {
+    if (!loaded || !stats) return;
+    ensureStructure();
+    stats.totalSentences++;
+    dirty = true;
+    maybeSave(false);
+  }
+
+  function recordAchievement(id) {
+    if (!loaded || !stats || !id) return;
+    ensureStructure();
+    if (!stats.achievements[id]) {
+      stats.achievements[id] = { unlockedAt: new Date().toISOString() };
+      dirty = true;
+      maybeSave(true);
+      return true;
+    }
+    return false;
   }
 
   function recordDelete() {
@@ -231,6 +301,9 @@
     recordPaste: recordPaste,
     recordCombo: recordCombo,
     recordMilestone: recordMilestone,
+    recordWord: recordWord,
+    recordSentence: recordSentence,
+    recordAchievement: recordAchievement,
     setProfile: setProfile,
     getSnapshot: getSnapshot,
     resetAll: resetAll,

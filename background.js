@@ -40,6 +40,11 @@ const DEFAULTS = {
   clickEffects: false,
   backendKind: 'auto',
   backendUrl: '',
+  theme: '',
+  wordEffects: true,
+  sentenceEffects: true,
+  wpmIndicator: false,
+  syncSettings: false,
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },

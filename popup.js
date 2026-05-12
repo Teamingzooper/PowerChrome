@@ -41,6 +41,11 @@ const DEFAULTS = {
   clickEffects: false,
   backendKind: 'auto',
   backendUrl: '',
+  theme: '',
+  wordEffects: true,
+  sentenceEffects: true,
+  wpmIndicator: false,
+  syncSettings: false,
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -58,6 +63,19 @@ const PRESET_SIDE_EFFECTS = {
   intense: { particleCount: 30, shakeIntensity: 10 },
   retro:   { particleCount: 10, shakeIntensity: 6 },
   minimal: { particleCount: 5,  shakeIntensity: 0 }
+};
+
+// Themes mirrored from scripts/effect-presets.js so the popup is standalone.
+// Selecting a theme writes every field into state.
+const THEMES = {
+  cyberpunk:   { label: 'Cyberpunk',    icon: '🌃', preset: 'intense', colorScheme: 'neon',       soundPack: 'arcade',  shakeIntensity: 8,  particleCount: 22, volume: 0.55, bitcrushAmount: 0.55, waveform: 'square',   trailLength: 6 },
+  pastelDream: { label: 'Pastel Dream', icon: '🌸', preset: 'subtle',  colorScheme: 'pastel',     soundPack: 'default', shakeIntensity: 2,  particleCount: 9,  volume: 0.35, bitcrushAmount: 0.15, waveform: 'sine',     trailLength: 3 },
+  mechanical:  { label: 'Mechanical',   icon: '⌨️', preset: 'retro',   colorScheme: 'monochrome', soundPack: 'arcade',  shakeIntensity: 4,  particleCount: 8,  volume: 0.50, bitcrushAmount: 0.25, waveform: 'square',   trailLength: 0 },
+  vaporwave:   { label: 'Vaporwave',    icon: '🌴', preset: 'default', colorScheme: 'custom',     soundPack: 'synth',   shakeIntensity: 4,  particleCount: 14, volume: 0.40, bitcrushAmount: 0.25, waveform: 'sine',     trailLength: 8,
+                 customColors: ['#ff71ce','#b967ff','#01cdfe','#05ffa1','#fffb96','#ff9cee'] },
+  studioGhibli:{ label: 'Studio',       icon: '🍃', preset: 'subtle',  colorScheme: 'custom',     soundPack: 'default', shakeIntensity: 1,  particleCount: 6,  volume: 0.30, bitcrushAmount: 0.10, waveform: 'triangle', trailLength: 2,
+                 customColors: ['#a8c98a','#e0d4a0','#b8c4e0','#d9a3a0','#f3d8b6'] },
+  retroArcade: { label: 'Retro Arcade', icon: '🕹️', preset: 'intense', colorScheme: 'fire',       soundPack: 'retro',   shakeIntensity: 7,  particleCount: 18, volume: 0.50, bitcrushAmount: 0.75, waveform: 'triangle', trailLength: 4 }
 };
 
 const MILESTONE_SLOTS = ['fireworks', 'galaxy', 'tornado', 'supernova', 'blackhole', 'bigbang', 'universe'];
@@ -439,12 +457,19 @@ function refresh() {
   $('#selectionEffects').checked = !!state.selectionEffects;
   $('#comboBar').checked = !!state.comboBar;
   $('#clickEffects').checked = !!state.clickEffects;
+  $('#wordEffects').checked = !!state.wordEffects;
+  $('#sentenceEffects').checked = !!state.sentenceEffects;
+  $('#wpmIndicator').checked = !!state.wpmIndicator;
+  $('#syncSettings').checked = !!state.syncSettings;
   $('#trailLength').value = state.trailLength;
   $('#trailLengthVal').textContent = state.trailLength;
   $('#backendKind').value = state.backendKind || 'auto';
   $('#backendUrl').value = state.backendUrl || '';
   $$('#comboBarStyleChips button').forEach(function (b) {
     b.classList.toggle('active', b.dataset.style === state.comboBarStyle);
+  });
+  $$('#themeChips button').forEach(function (b) {
+    b.classList.toggle('active', b.dataset.theme === state.theme);
   });
 
   $$('#presetChips button').forEach(function (b) {
@@ -475,6 +500,10 @@ function bindBasics() {
   bindCheckbox('selectionEffects', 'selectionEffects');
   bindCheckbox('comboBar', 'comboBar');
   bindCheckbox('clickEffects', 'clickEffects');
+  bindCheckbox('wordEffects', 'wordEffects');
+  bindCheckbox('sentenceEffects', 'sentenceEffects');
+  bindCheckbox('wpmIndicator', 'wpmIndicator');
+  bindCheckbox('syncSettings', 'syncSettings');
   bindSelect('backendKind', 'backendKind');
   bindRangeInt('trailLength', 'trailLength', 'trailLengthVal');
   $('#backendUrl').addEventListener('change', function (e) {
@@ -535,6 +564,27 @@ function bindBasics() {
       state.preset = b.dataset.preset;
       const effect = PRESET_SIDE_EFFECTS[b.dataset.preset];
       if (effect) Object.assign(state, effect);
+      refresh();
+      save();
+    });
+  });
+
+  $$('#themeChips button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      const themeName = b.dataset.theme;
+      const theme = THEMES[themeName];
+      if (!theme) return;
+      // Apply every theme field, ignoring metadata like label/icon.
+      const skip = ['label', 'icon'];
+      Object.keys(theme).forEach(function (k) {
+        if (skip.indexOf(k) >= 0) return;
+        if (k === 'customColors') {
+          state.customColors = theme.customColors.slice();
+          return;
+        }
+        state[k] = theme[k];
+      });
+      state.theme = themeName;
       refresh();
       save();
     });

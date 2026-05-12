@@ -432,6 +432,90 @@
     }
   }
 
+  /* ---------- Event logging (milestones + achievements) ---------- */
+  let loggedEventIds = new Set();
+  async function logEvent(type, payload) {
+    if (!remoteAccount || !remoteAccount.token) return { ok: false, error: 'no-account' };
+    // Deduplicate per-session for cheap ones; server also dedupes by id.
+    const dedupeKey = type + ':' + (payload && payload.id || JSON.stringify(payload || {}));
+    if (loggedEventIds.has(dedupeKey)) return { ok: true, deduped: true };
+    loggedEventIds.add(dedupeKey);
+    try {
+      const res = await apiPost('/api/events/log', {
+        token: remoteAccount.token,
+        type: type,
+        payload: payload || {}
+      });
+      if (res && res.ok) { markRemoteSuccess(); return { ok: true }; }
+      return { ok: false };
+    } catch (e) {
+      markRemoteFailure();
+      return { ok: false };
+    }
+  }
+
+  async function refreshActivityFeed() {
+    if (!remoteAccount || !remoteAccount.token) return [];
+    try {
+      const res = await apiPost('/api/events/feed', { token: remoteAccount.token });
+      if (res && res.ok) {
+        REMOTE_CACHE.feed = res.events || [];
+        markRemoteSuccess();
+      }
+    } catch (e) {
+      markRemoteFailure();
+    }
+    return REMOTE_CACHE.feed || [];
+  }
+
+  /* ---------- Settings sync ---------- */
+  let lastPushedSettingsHash = '';
+  function hashSettings(s) {
+    try { return JSON.stringify(s); } catch (e) { return ''; }
+  }
+  async function pushSettings(settings) {
+    if (!remoteAccount || !remoteAccount.token) return { ok: false };
+    const h = hashSettings(settings);
+    if (h === lastPushedSettingsHash) return { ok: true, unchanged: true };
+    try {
+      const res = await apiPost('/api/settings/sync', {
+        token: remoteAccount.token,
+        op: 'push',
+        settings: settings
+      });
+      if (res && res.ok) { lastPushedSettingsHash = h; markRemoteSuccess(); return { ok: true }; }
+      return { ok: false };
+    } catch (e) {
+      markRemoteFailure();
+      return { ok: false };
+    }
+  }
+  async function pullSettings() {
+    if (!remoteAccount || !remoteAccount.token) return null;
+    try {
+      const res = await apiPost('/api/settings/sync', {
+        token: remoteAccount.token,
+        op: 'pull'
+      });
+      if (res && res.ok) { markRemoteSuccess(); return res; }
+      return null;
+    } catch (e) {
+      markRemoteFailure();
+      return null;
+    }
+  }
+
+  /* ---------- Public profile fetch ---------- */
+  async function fetchPublicProfile(code) {
+    try {
+      const res = await apiPost('/api/profile/get', { code: code });
+      if (res && res.ok) return res;
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   async function updateProfileOnRemote(profile) {
     profile = profile || {};
     try {
@@ -506,7 +590,30 @@
       const h = await pingRemote();
       if (h && h.ok) {
         try { await ensureRemoteAccount(); } catch (e) { /* swallow */ }
-        await Promise.all([refreshRemoteFriends(), refreshRemoteLeaderboard('combo', 'friends'), refreshRemoteLeaderboard('combo', 'global')]);
+        await Promise.all([
+          refreshRemoteFriends(),
+          refreshRemoteLeaderboard('combo', 'friends'),
+          refreshRemoteLeaderboard('combo', 'global'),
+          refreshActivityFeed()
+        ]);
+        // If the user has opted into settings sync, prefer remote when newer.
+        try {
+          const settings = window.__powerMode.main && window.__powerMode.main.getSettings();
+          if (settings && settings.syncSettings) {
+            const pulled = await pullSettings();
+            if (pulled && pulled.settings && window.__powerMode.main && window.__powerMode.main.applySettings) {
+              const stillSync = (window.__powerMode.main.getSettings() || {}).syncSettings;
+              if (stillSync) {
+                const merged = Object.assign({}, settings, pulled.settings, {
+                  syncSettings: true,
+                  backendKind: settings.backendKind,
+                  backendUrl: settings.backendUrl
+                });
+                window.__powerMode.main.applySettings(merged);
+              }
+            }
+          }
+        } catch (e) { /* settings pull is non-critical */ }
       }
     },
     getMyAccount: function () {
@@ -589,6 +696,12 @@
     syncStats: syncStatsToRemote,
     refreshFriends: refreshRemoteFriends,
     refreshLeaderboard: refreshRemoteLeaderboard,
+    refreshActivityFeed: refreshActivityFeed,
+    getActivityFeed: function () { return (REMOTE_CACHE.feed || []).slice(); },
+    logEvent: logEvent,
+    pushSettings: pushSettings,
+    pullSettings: pullSettings,
+    fetchPublicProfile: fetchPublicProfile,
     updateProfile: updateProfileOnRemote,
     onChange: function (fn) { remoteListeners.push(fn); return function () { remoteListeners = remoteListeners.filter(function (x) { return x !== fn; }); }; }
   };

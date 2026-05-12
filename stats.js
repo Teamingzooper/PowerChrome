@@ -129,6 +129,151 @@
 
     $('#statTotalPastes').textContent = formatInt(currentStats.totalPastes);
     $('#statPasteCharsSub').textContent = formatInt(currentStats.totalPasteChars) + ' chars eased in';
+
+    $('#statPeakWpm').textContent = formatInt(currentStats.wpmPeak);
+    $('#statPeakWpmSub').textContent = currentStats.wpmPeak >= 140 ? 'lightning fingers'
+      : currentStats.wpmPeak >= 100 ? 'speed demon'
+      : currentStats.wpmPeak >= 60 ? 'quick fingers'
+      : '10-second window';
+
+    $('#statWords').textContent = formatInt(currentStats.totalWords);
+    $('#statSentencesSub').textContent = formatInt(currentStats.totalSentences) + ' sentences';
+  }
+
+  /* ---------------- Hour-of-day chart ---------------- */
+  function renderHourChart() {
+    const chart = $('#hourChart');
+    chart.innerHTML = '';
+    const hours = currentStats.charsByHour || {};
+    let maxVal = 0;
+    let total = 0;
+    let peakHour = -1;
+    for (let h = 0; h < 24; h++) {
+      const v = hours[String(h)] || 0;
+      total += v;
+      if (v > maxVal) { maxVal = v; peakHour = h; }
+    }
+    const nowHour = new Date().getHours();
+    for (let h = 0; h < 24; h++) {
+      const v = hours[String(h)] || 0;
+      const bar = document.createElement('div');
+      bar.className = 'h' + (v === 0 ? ' empty' : '') + (h === nowHour ? ' active-now' : '');
+      const heightPct = maxVal > 0 ? (v / maxVal) * 100 : 0;
+      bar.style.height = Math.max(2, heightPct) + '%';
+      const label = (h < 10 ? '0' : '') + h + ':00';
+      bar.dataset.tip = label + ' · ' + formatInt(v) + ' chars';
+      chart.appendChild(bar);
+    }
+    $('#hourMost').textContent = peakHour >= 0
+      ? 'Most active: ' + ((peakHour < 10 ? '0' : '') + peakHour + ':00')
+      : 'No data yet';
+    $('#hourTotal').textContent = formatInt(total) + ' chars · 24 buckets';
+  }
+
+  /* ---------------- Achievements ---------------- */
+  function renderAchievements() {
+    const grid = $('#achievementGrid');
+    grid.innerHTML = '';
+    const ach = (window.__powerMode && window.__powerMode.achievements) ? window.__powerMode.achievements : null;
+    if (!ach) {
+      $('#achievementSummary').textContent = 'achievements module missing';
+      return;
+    }
+    const catalog = ach.catalog();
+    const owned = currentStats.achievements || {};
+    const unlocked = catalog.filter(function (a) { return owned[a.id]; });
+    $('#achievementSummary').textContent = unlocked.length + ' / ' + catalog.length + ' unlocked';
+    catalog.forEach(function (a) {
+      const owns = !!owned[a.id];
+      const tile = document.createElement('div');
+      tile.className = 'achieve ' + (owns ? 'unlocked' : 'locked');
+      tile.title = a.desc;
+      const ic = document.createElement('div');
+      ic.className = 'ic';
+      ic.textContent = a.icon;
+      const body = document.createElement('div');
+      body.className = 'body';
+      const name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = owns ? a.name : '???';
+      const desc = document.createElement('div');
+      desc.className = 'desc';
+      desc.textContent = a.desc;
+      body.appendChild(name);
+      body.appendChild(desc);
+      tile.appendChild(ic);
+      tile.appendChild(body);
+      if (owns) {
+        const when = document.createElement('div');
+        when.className = 'when';
+        when.textContent = owned[a.id].unlockedAt ? owned[a.id].unlockedAt.slice(0, 10) : '';
+        tile.appendChild(when);
+      }
+      grid.appendChild(tile);
+    });
+  }
+
+  /* ---------------- Friend activity feed ---------------- */
+  function renderActivityFeed() {
+    const list = $('#activityFeed');
+    list.innerHTML = '';
+    const social = window.__powerMode && window.__powerMode.social;
+    if (!social || !social.remoteBackend) return;
+    const events = social.remoteBackend.getActivityFeed
+      ? social.remoteBackend.getActivityFeed()
+      : [];
+    events.forEach(function (e) {
+      const who = e.who || {};
+      const row = document.createElement('li');
+      row.className = 'feed-row';
+      const av = document.createElement('div');
+      av.className = 'feed-avatar';
+      av.textContent = who.avatar || '🙂';
+      const text = document.createElement('div');
+      text.className = 'feed-text';
+      const name = document.createElement('strong');
+      name.textContent = who.username || 'a friend';
+      const what = document.createElement('span');
+      what.className = 'what';
+      what.textContent = ' ' + describeEvent(e);
+      text.appendChild(name);
+      text.appendChild(what);
+      const when = document.createElement('div');
+      when.className = 'feed-when';
+      when.textContent = ago(e.ts);
+      row.appendChild(av);
+      row.appendChild(text);
+      row.appendChild(when);
+      list.appendChild(row);
+    });
+  }
+
+  function describeEvent(e) {
+    if (!e || !e.type) return '';
+    if (e.type === 'achievement') {
+      return 'unlocked ' + ((e.payload && e.payload.icon) || '🏆') + ' ' + ((e.payload && e.payload.name) || 'an achievement');
+    }
+    if (e.type === 'milestone') {
+      const map = { fireworks:'🎆', galaxy:'🌌', tornado:'🌪️', supernova:'💥', blackhole:'🕳️', bigbang:'🌠', universe:'♾️' };
+      const name = e.payload && e.payload.name;
+      const icon = map[name] || '⭐';
+      return 'hit ' + icon + ' ' + (name || 'a milestone') + ' at ' + (e.payload && e.payload.at || '?') + '×';
+    }
+    if (e.type === 'combo-high') {
+      return 'set a new personal-best combo: ' + (e.payload && e.payload.count || 0) + '×';
+    }
+    return e.type;
+  }
+
+  function ago(iso) {
+    if (!iso) return '';
+    const ms = Date.now() - new Date(iso).getTime();
+    const m = Math.floor(ms / 60000);
+    if (m < 1) return 'just now';
+    if (m < 60) return m + 'm ago';
+    const h = Math.floor(m / 60);
+    if (h < 24) return h + 'h ago';
+    return Math.floor(h / 24) + 'd ago';
   }
 
   /* ---------------- Chart + lists ---------------- */
@@ -402,12 +547,15 @@
     renderProfile();
     renderHero();
     renderChart();
+    renderHourChart();
     renderSites();
     renderMilestones();
+    renderAchievements();
     renderBackendBanner();
     renderMyCode();
     renderFriendList();
     renderLeaderboard();
+    renderActivityFeed();
     renderDiagnostics();
   }
 
@@ -534,6 +682,13 @@
         bind();
         diagInterval = setInterval(renderDiagnostics, 5000);
 
+        // Re-check achievements against current snapshot (catches retroactive
+        // unlocks if the user typed before the catalog existed).
+        if (window.__powerMode.achievements && window.__powerMode.achievements.checkAll) {
+          window.__powerMode.achievements.checkAll();
+          renderAchievements();
+        }
+
         // Re-render any time the remote backend gets fresh data or its
         // connectivity flips on/off.
         if (window.__powerMode.social && window.__powerMode.social.onRemoteChange) {
@@ -542,6 +697,7 @@
             renderMyCode();
             renderFriendList();
             renderLeaderboard();
+            renderActivityFeed();
             renderDiagnostics();
           });
         }

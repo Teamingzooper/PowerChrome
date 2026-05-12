@@ -67,6 +67,18 @@
         if (window.__powerMode.stats) {
           try { window.__powerMode.stats.recordMilestone(m.name); } catch (e) { /* ignore */ }
         }
+        // Surface to the friend activity feed via the remote backend.
+        const social = window.__powerMode.social;
+        if (social && social.remoteBackend && social.remoteBackend.logEvent) {
+          try {
+            social.remoteBackend.logEvent('milestone', {
+              id: m.name,
+              name: m.name,
+              at: m.at,
+              tier: m.tier
+            });
+          } catch (e) { /* ignore */ }
+        }
       }
     }
     return count;

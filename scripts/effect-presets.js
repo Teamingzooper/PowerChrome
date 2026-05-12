@@ -35,6 +35,93 @@
     return list.length ? list : SCHEMES.rainbow;
   }
 
+  /* One-click theme bundles. Selecting one writes every field into settings; the
+   * UI still lets you tweak afterwards. customColors is only applied when the
+   * theme explicitly defines one.
+   */
+  const THEMES = {
+    cyberpunk: {
+      label: 'Cyberpunk',
+      icon: '🌃',
+      preset: 'intense',
+      colorScheme: 'neon',
+      soundPack: 'arcade',
+      shakeIntensity: 8,
+      particleCount: 22,
+      volume: 0.55,
+      bitcrushAmount: 0.55,
+      waveform: 'square',
+      trailLength: 6
+    },
+    pastelDream: {
+      label: 'Pastel Dream',
+      icon: '🌸',
+      preset: 'subtle',
+      colorScheme: 'pastel',
+      soundPack: 'default',
+      shakeIntensity: 2,
+      particleCount: 9,
+      volume: 0.35,
+      bitcrushAmount: 0.15,
+      waveform: 'sine',
+      trailLength: 3
+    },
+    mechanical: {
+      label: 'Mechanical',
+      icon: '⌨️',
+      preset: 'retro',
+      colorScheme: 'monochrome',
+      soundPack: 'arcade',
+      shakeIntensity: 4,
+      particleCount: 8,
+      volume: 0.5,
+      bitcrushAmount: 0.25,
+      waveform: 'square',
+      trailLength: 0
+    },
+    vaporwave: {
+      label: 'Vaporwave',
+      icon: '🌴',
+      preset: 'default',
+      colorScheme: 'custom',
+      customColors: ['#ff71ce', '#b967ff', '#01cdfe', '#05ffa1', '#fffb96', '#ff9cee'],
+      soundPack: 'synth',
+      shakeIntensity: 4,
+      particleCount: 14,
+      volume: 0.4,
+      bitcrushAmount: 0.25,
+      waveform: 'sine',
+      trailLength: 8
+    },
+    studioGhibli: {
+      label: 'Studio',
+      icon: '🍃',
+      preset: 'subtle',
+      colorScheme: 'custom',
+      customColors: ['#a8c98a', '#e0d4a0', '#b8c4e0', '#d9a3a0', '#f3d8b6'],
+      soundPack: 'default',
+      shakeIntensity: 1,
+      particleCount: 6,
+      volume: 0.3,
+      bitcrushAmount: 0.1,
+      waveform: 'triangle',
+      trailLength: 2
+    },
+    retroArcade: {
+      label: 'Retro Arcade',
+      icon: '🕹️',
+      preset: 'intense',
+      colorScheme: 'fire',
+      soundPack: 'retro',
+      shakeIntensity: 7,
+      particleCount: 18,
+      volume: 0.5,
+      bitcrushAmount: 0.75,
+      waveform: 'triangle',
+      trailLength: 4
+    }
+  };
+
   window.__powerMode.presets = {
     getPreset: function (name) { return PRESETS[name] || PRESETS.default; },
     getColorScheme: function (name) {
@@ -42,10 +129,13 @@
       return SCHEMES[name] || SCHEMES.rainbow;
     },
     getSoundPack: function (name) { return PACKS[name] || PACKS.default; },
+    getTheme: function (name) { return THEMES[name] || null; },
+    getThemes: function () { return THEMES; },
     LIST: {
       presets: Object.keys(PRESETS),
       schemes: Object.keys(SCHEMES).concat(['custom']),
-      packs: Object.keys(PACKS)
+      packs: Object.keys(PACKS),
+      themes: Object.keys(THEMES)
     },
     _isValidHex: isValidHex
   };
