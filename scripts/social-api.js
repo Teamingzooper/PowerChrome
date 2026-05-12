@@ -341,16 +341,44 @@
         signal: ctrl ? ctrl.signal : undefined
       });
       clearTimeout(timeout);
+      if (res.status === 401 && !(opts && opts.noAuthRecover)) {
+        // Server doesn't recognize our token (e.g. the DB was wiped).
+        // Drop local credentials and let the next call create a fresh account.
+        await handleOrphanedAccount();
+      }
       if (!res.ok) {
         const text = await res.text();
         const err = new Error('http ' + res.status);
         err.payload = text;
+        err.status = res.status;
         throw err;
       }
       return await res.json();
     } catch (e) {
       clearTimeout(timeout);
       throw e;
+    }
+  }
+
+  let recoveringFromOrphan = false;
+  async function handleOrphanedAccount() {
+    if (recoveringFromOrphan) return;
+    recoveringFromOrphan = true;
+    try {
+      remoteAccount = null;
+      lastPushedSettingsHash = '';
+      loggedEventIds = new Set();
+      REMOTE_CACHE.friends = [];
+      REMOTE_CACHE.leaderboards = {};
+      REMOTE_CACHE.feed = [];
+      if (hasChromeStorageRemote()) {
+        try { chrome.storage.local.remove(['powerModeAccount']); } catch (e) { /* ignore */ }
+      }
+      // Re-create an account immediately so the user keeps a valid identity.
+      try { await ensureRemoteAccount(); } catch (e) { /* will retry on next call */ }
+      notifyRemote();
+    } finally {
+      recoveringFromOrphan = false;
     }
   }
 
