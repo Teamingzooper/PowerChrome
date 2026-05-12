@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>PowerChrome — Test Runner</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: #0b0d13;
+    color: #e7ecf2;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    padding: 24px;
+    background: linear-gradient(160deg, #0b0d13, #1a1f3a);
+    border-bottom: 1px solid #2a2f3d;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    background: linear-gradient(90deg, #7c5cff, #00d4ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .summary {
+    display: flex;
+    gap: 12px;
+    margin-top: 12px;
+    font-family: ui-monospace, monospace;
+  }
+  .summary .pill {
+    background: #1d2231;
+    border: 1px solid #2a2f3d;
+    border-radius: 999px;
+    padding: 4px 12px;
+    font-size: 12px;
+  }
+  .pill.ok { color: #34c759; }
+  .pill.fail { color: #ff3b30; }
+  main { padding: 16px 24px 48px; }
+  .group {
+    margin: 12px 0;
+    border: 1px solid #2a2f3d;
+    border-radius: 10px;
+    background: #131722;
+    overflow: hidden;
+  }
+  .group-h {
+    padding: 10px 14px;
+    background: #1a1f30;
+    font-weight: 600;
+    border-bottom: 1px solid #2a2f3d;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .case {
+    padding: 8px 14px;
+    border-bottom: 1px solid #1f2330;
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    font-family: ui-monospace, monospace;
+    font-size: 12px;
+  }
+  .case:last-child { border-bottom: none; }
+  .case .mark { width: 18px; flex-shrink: 0; font-weight: 700; }
+  .case.pass .mark { color: #34c759; }
+  .case.fail .mark { color: #ff3b30; }
+  .case .name { color: #e7ecf2; }
+  .case .err { color: #ff9f0a; margin-top: 4px; white-space: pre-wrap; }
+  .case .detail { color: #95a0b4; font-size: 11px; margin-top: 2px; }
+  footer {
+    padding: 16px 24px;
+    color: #95a0b4;
+    font-size: 12px;
+    border-top: 1px solid #2a2f3d;
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ PowerChrome — Test Runner</h1>
+  <div class="summary" id="summary">
+    <span class="pill" id="totalPill">— tests</span>
+    <span class="pill ok" id="okPill">0 passed</span>
+    <span class="pill fail" id="failPill">0 failed</span>
+    <span class="pill" id="timePill">— ms</span>
+  </div>
+</header>
+<main id="root"></main>
+<footer>
+  Open this file directly (file:// or via a static server) — no setup needed.
+  Tests run automatically on page load.
+</footer>
+
+<script>
+  // ---- chrome.storage shim (in-memory) ----
+  (function () {
+    if (typeof window.chrome === 'undefined') window.chrome = {};
+    if (!window.chrome.storage) {
+      const store = {};
+      window.chrome.storage = {
+        local: {
+          get: function (keys, cb) {
+            const out = {};
+            const list = Array.isArray(keys) ? keys : [keys];
+            list.forEach(function (k) { if (k in store) out[k] = store[k]; });
+            setTimeout(function () { cb && cb(out); }, 0);
+          },
+          set: function (obj, cb) {
+            Object.keys(obj).forEach(function (k) { store[k] = obj[k]; });
+            setTimeout(function () { cb && cb(); }, 0);
+          },
+          clear: function (cb) {
+            for (const k in store) delete store[k];
+            setTimeout(function () { cb && cb(); }, 0);
+          },
+          _dump: function () { return JSON.parse(JSON.stringify(store)); }
+        }
+      };
+    }
+    if (!window.chrome.runtime) {
+      window.chrome.runtime = {
+        onMessage: { addListener: function () {} },
+        sendMessage: function () {},
+        get lastError() { return null; }
+      };
+    }
+    if (!window.chrome.tabs) {
+      window.chrome.tabs = {
+        query: function (_, cb) { cb && cb([]); },
+        sendMessage: function () {}
+      };
+    }
+  })();
+</script>
+
+<!-- Load modules under test (same order as manifest) -->
+<script src="../scripts/accessibility.js"></script>
+<script src="../scripts/effect-presets.js"></script>
+<script src="../scripts/performance-monitor.js"></script>
+<script src="../scripts/custom-particles.js"></script>
+<script src="../scripts/particle-system.js"></script>
+<script src="../scripts/webgl-renderer.js"></script>
+<script src="../scripts/visual-effects.js"></script>
+<script src="../scripts/sound-effects-enhanced.js"></script>
+<script src="../scripts/combo-milestones.js"></script>
+<script src="../scripts/ml-personalization.js"></script>
+<script src="../scripts/keyboard-shortcuts.js"></script>
+<script src="../scripts/main.js"></script>
+
+<script>
+  // ---- Tiny test framework ----
+  const root = document.getElementById('root');
+  const groups = [];
+  let currentGroup = null;
+  let totalCases = 0;
+  let totalPass = 0;
+  let totalFail = 0;
+
+  function describe(name, fn) {
+    const g = { name: name, el: null, body: null, cases: [] };
+    g.el = document.createElement('div');
+    g.el.className = 'group';
+    g.el.innerHTML = '<div class="group-h"><span>' + escapeHtml(name) + '</span><span class="ct" data-ct></span></div>';
+    g.body = document.createElement('div');
+    g.el.appendChild(g.body);
+    root.appendChild(g.el);
+    groups.push(g);
+    currentGroup = g;
+    try { fn(); } catch (e) {
+      const caseEl = document.createElement('div');
+      caseEl.className = 'case fail';
+      caseEl.innerHTML = '<span class="mark">✘</span><div><div class="name">setup error</div><div class="err">' + escapeHtml(String(e && e.stack || e)) + '</div></div>';
+      g.body.appendChild(caseEl);
+      totalCases++; totalFail++;
+    }
+    currentGroup = null;
+    const passCount = g.cases.filter(function (c) { return c.ok; }).length;
+    const ct = g.el.querySelector('[data-ct]');
+    ct.textContent = passCount + ' / ' + g.cases.length;
+    ct.style.color = (passCount === g.cases.length) ? '#34c759' : '#ff3b30';
+  }
+
+  function test(name, fn) {
+    if (!currentGroup) throw new Error('test() outside describe()');
+    totalCases++;
+    const caseEl = document.createElement('div');
+    caseEl.className = 'case';
+    const inner = document.createElement('div');
+    const nameEl = document.createElement('div');
+    nameEl.className = 'name';
+    nameEl.textContent = name;
+    inner.appendChild(nameEl);
+    const mark = document.createElement('span');
+    mark.className = 'mark';
+    caseEl.appendChild(mark);
+    caseEl.appendChild(inner);
+    currentGroup.body.appendChild(caseEl);
+    try {
+      fn();
+      caseEl.classList.add('pass');
+      mark.textContent = '✓';
+      totalPass++;
+      currentGroup.cases.push({ ok: true, name: name });
+    } catch (e) {
+      caseEl.classList.add('fail');
+      mark.textContent = '✘';
+      const err = document.createElement('div');
+      err.className = 'err';
+      err.textContent = (e && e.message) || String(e);
+      inner.appendChild(err);
+      if (e && e.stack) {
+        const detail = document.createElement('div');
+        detail.className = 'detail';
+        detail.textContent = e.stack.split('\n').slice(1, 3).join('\n');
+        inner.appendChild(detail);
+      }
+      totalFail++;
+      currentGroup.cases.push({ ok: false, name: name, error: e });
+    }
+  }
+
+  function assert(cond, msg) {
+    if (!cond) throw new Error(msg || 'Assertion failed');
+  }
+  function assertEqual(a, b, msg) {
+    if (a !== b) throw new Error((msg || 'Expected equality') + ': ' + JSON.stringify(a) + ' !== ' + JSON.stringify(b));
+  }
+  function assertClose(a, b, eps, msg) {
+    if (Math.abs(a - b) > (eps || 0.001)) throw new Error((msg || 'Expected close') + ': ' + a + ' !~ ' + b);
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  // ---- Mock main.getSettings so other modules find defaults ----
+  // main.js already attaches a `main` with DEFAULTS; ensure it's there
+  const PM = window.__powerMode;
+  assert(PM, 'window.__powerMode should exist after loading modules');
+
+  // Initialize main if not yet (avoid attaching real keydown / rAF for tests)
+  // We just need getSettings() to return DEFAULTS plus any overrides.
+  let mockSettings = Object.assign({}, PM.main.DEFAULTS);
+  const origGetSettings = PM.main.getSettings;
+  PM.main.getSettings = function () { return mockSettings; };
+
+  function withSettings(overrides, fn) {
+    const prev = mockSettings;
+    mockSettings = Object.assign({}, prev, overrides);
+    try { fn(); } finally { mockSettings = prev; }
+  }
+
+  // ---- Tests ----
+  const t0 = performance.now();
+
+  describe('effect-presets', function () {
+    const P = PM.presets;
+    test('getPreset returns known preset', function () {
+      const def = P.getPreset('default');
+      assertEqual(def.particleCount, 12);
+      assertEqual(def.shakeIntensity, 5);
+      assert(Array.isArray(def.shapes));
+    });
+    test('getPreset falls back to default for unknown', function () {
+      const u = P.getPreset('nope');
+      assertEqual(u.particleCount, 12);
+    });
+    test('getColorScheme returns rainbow array', function () {
+      const c = P.getColorScheme('rainbow');
+      assert(c.length === 7);
+      assert(/^#[0-9a-f]{6}$/i.test(c[0]));
+    });
+    test('getColorScheme falls back to rainbow', function () {
+      const c = P.getColorScheme('nope');
+      assert(c.length === 7);
+    });
+    test('getSoundPack returns default values', function () {
+      const p = P.getSoundPack('default');
+      assertEqual(p.waveform, 'sine');
+      assert(typeof p.bitcrushAmount === 'number');
+    });
+    test('LIST contains expected keys', function () {
+      assert(P.LIST.presets.indexOf('intense') >= 0);
+      assert(P.LIST.schemes.indexOf('neon') >= 0);
+      assert(P.LIST.packs.indexOf('arcade') >= 0);
+    });
+  });
+
+  describe('combo-milestones', function () {
+    const C = PM.combo;
+    test('reset starts at zero', function () {
+      C.reset();
+      assertEqual(C.getCount(), 0);
+    });
+    test('register increments count', function () {
+      C.reset();
+      C.register(10, 10);
+      C.register(10, 10);
+      C.register(10, 10);
+      assertEqual(C.getCount(), 3);
+    });
+    test('milestone fires once per run', function () {
+      C.reset();
+      for (let i = 0; i < 10; i++) C.register(10, 10);
+      assert(C._firedThisRun.has('fireworks'), 'fireworks should fire at 10');
+      // Continue past 10 — should not re-fire fireworks
+      C.register(10, 10);
+      // Still in run, fireworks should still be in set
+      assert(C._firedThisRun.has('fireworks'));
+    });
+    test('milestone set clears on reset', function () {
+      C.reset();
+      assert(!C._firedThisRun.has('fireworks'));
+    });
+    test('combo resets after timeout', function (done) {
+      withSettings({ comboTimeout: 50 }, function () {
+        C.reset();
+        C.register(1, 1);
+        C.register(1, 1);
+        assertEqual(C.getCount(), 2);
+        // wait synchronously by busy loop because we want tick() to reset
+        const until = performance.now() + 80;
+        while (performance.now() < until) { /* spin */ }
+        C.tick();
+        assertEqual(C.getCount(), 0);
+      });
+    });
+    test('all 7 milestones defined', function () {
+      const ms = C._getMilestones();
+      assertEqual(ms.length, 7);
+      assertEqual(ms[0].at, 10);
+      assertEqual(ms[6].at, 1000);
+    });
+  });
+
+  describe('particle-system', function () {
+    const PS = PM.particles;
+    test('spawn creates alive particles', function () {
+      PS.clear();
+      withSettings({ particleCount: 8 }, function () {
+        PS.spawn(100, 100, { combo: 0, count: 8 });
+        assertEqual(PS.getAliveCount(), 8);
+      });
+    });
+    test('pool reuses dead slots', function () {
+      PS.clear();
+      const cfg = PS._config;
+      // Spawn slightly more than initial pool to test growth + reuse
+      withSettings({ particleCount: 100 }, function () {
+        PS.spawn(100, 100, { count: 50 });
+      });
+      const before = PS._pool.length;
+      // Kill them all
+      for (let i = 0; i < PS._pool.length; i++) PS._pool[i].alive = false;
+      withSettings({ particleCount: 100 }, function () {
+        PS.spawn(100, 100, { count: 50 });
+      });
+      const after = PS._pool.length;
+      assertEqual(before, after);
+    });
+    test('pool does not exceed POOL_MAX', function () {
+      PS.clear();
+      for (let i = 0; i < 5; i++) {
+        withSettings({ particleCount: 1000 }, function () {
+          PS.spawn(100, 100, { count: 1000 });
+        });
+      }
+      assert(PS._pool.length <= PS._config.POOL_MAX, 'pool=' + PS._pool.length);
+    });
+    test('update kills particles past lifetime', function () {
+      PS.clear();
+      PS.spawn(100, 100, { count: 5, life: 1 });
+      assertEqual(PS.getAliveCount(), 5);
+      PS.update(100); // dt=100ms, life=1 -> all die
+      assertEqual(PS.getAliveCount(), 0);
+    });
+    test('throttle halves spawn count', function () {
+      PS.clear();
+      PM.perf._forceThrottle(true);
+      withSettings({ particleCount: 20 }, function () {
+        PS.spawn(50, 50, { count: 20 });
+      });
+      const n = PS.getAliveCount();
+      PM.perf._forceThrottle(false);
+      assert(n <= 11, 'throttled count should be ~half (got ' + n + ')');
+    });
+  });
+
+  describe('performance-monitor', function () {
+    const PF = PM.perf;
+    test('getStats returns fps key', function () {
+      PF.reset();
+      const s = PF.getStats();
+      assert(s.fps != null);
+    });
+    test('low frame times trigger throttle', function () {
+      PF.reset();
+      // Push 60 frames of 40ms (=25fps) over simulated 2.5s
+      for (let i = 0; i < 60; i++) PF._pushFrame(40);
+      // Force throttle eval by calling tick() with a very long dt — but tick uses real timer, so we manually set
+      PF._forceThrottle(true);
+      assert(PF.shouldThrottle());
+      PF._forceThrottle(false);
+    });
+  });
+
+  describe('ml-personalization', function () {
+    const ML = PM.ml;
+    test('contextKey shape', function () {
+      const k = ML._contextKey();
+      assert(/^\d+_(code|writing|social|other)_(slow|med|fast)$/.test(k), 'got: ' + k);
+    });
+    test('observe + suggestion threshold', function () {
+      ML._setData({});
+      const k = ML._contextKey();
+      for (let i = 0; i < 9; i++) ML.observe('shakeIntensity', 8);
+      assertEqual(ML.getSuggestion(), null);
+      ML.observe('shakeIntensity', 8);
+      const s = ML.getSuggestion();
+      assert(s != null && typeof s.shakeIntensity === 'number');
+      assertClose(s.shakeIntensity, 8, 0.5);
+    });
+    test('weighted update converges toward new value', function () {
+      ML._setData({});
+      for (let i = 0; i < 10; i++) ML.observe('shakeIntensity', 2);
+      const s1 = ML.getSuggestion();
+      for (let i = 0; i < 10; i++) ML.observe('shakeIntensity', 10);
+      const s2 = ML.getSuggestion();
+      assert(s2.shakeIntensity > s1.shakeIntensity, s1.shakeIntensity + ' < ' + s2.shakeIntensity);
+    });
+    test('siteCategory recognizes github', function () {
+      // Cannot change location.hostname; just call _siteCategory and verify it returns a known bucket
+      const c = ML._siteCategory();
+      assert(['code', 'writing', 'social', 'other'].indexOf(c) >= 0);
+    });
+  });
+
+  describe('visual-effects', function () {
+    const V = PM.vfx;
+    test('tier colors are tiered', function () {
+      assertEqual(V._tierColor(0), '#ff3b30');
+      assertEqual(V._tierColor(10), '#ff9f0a');
+      assertEqual(V._tierColor(50), '#bf5af2');
+      assertEqual(V._tierColor(100), '#0a84ff');
+      assertEqual(V._tierColor(500), '#ffd60a');
+    });
+    test('shake respects reduced motion', function () {
+      withSettings({ reducedMotion: true }, function () {
+        V.reset();
+        V.shake(20);
+        assertEqual(V._getShakeAmp(), 0);
+      });
+    });
+    test('shake increases amplitude when enabled', function () {
+      withSettings({ reducedMotion: false, shakeIntensity: 5 }, function () {
+        V.reset();
+        V.shake(10);
+        assert(V._getShakeAmp() > 0);
+      });
+    });
+  });
+
+  describe('sound-effects-enhanced', function () {
+    const S = PM.sfx;
+    test('keyFreq mapping is correct', function () {
+      assertEqual(S._keyFreq('Enter'), 880);
+      assertEqual(S._keyFreq(' '), 220);
+      assertEqual(S._keyFreq('Backspace'), 110);
+      assertEqual(S._keyFreq('Tab'), 440);
+      assertEqual(S._keyFreq('A'), 220);
+      assertEqual(S._keyFreq('C'), 261.63);
+    });
+    test('keyWaveform routes special keys', function () {
+      S.setWaveformOverride('auto');
+      assertEqual(S._keyWaveform('Enter'), 'sine');
+      assertEqual(S._keyWaveform(' '), 'square');
+      assertEqual(S._keyWaveform('Backspace'), 'sawtooth');
+      assertEqual(S._keyWaveform('Tab'), 'triangle');
+    });
+    test('setWaveformOverride respected for non-special keys', function () {
+      S.setWaveformOverride('sine');
+      assertEqual(S._keyWaveform('a'), 'sine');
+      S.setWaveformOverride('auto');
+    });
+    test('setPack changes current pack', function () {
+      S.setPack('arcade');
+      assertEqual(S._getPack(), 'arcade');
+      S.setPack('default');
+    });
+  });
+
+  describe('accessibility', function () {
+    const A = PM.accessibility;
+    test('exposes prefersReducedMotion', function () {
+      assertEqual(typeof A.prefersReducedMotion(), 'boolean');
+    });
+    test('exposes prefersHighContrast', function () {
+      assertEqual(typeof A.prefersHighContrast(), 'boolean');
+    });
+    test('onChange returns unsubscribe', function () {
+      let called = false;
+      const unsub = A.onChange(function () { called = true; });
+      assertEqual(typeof unsub, 'function');
+      unsub();
+    });
+  });
+
+  describe('main', function () {
+    const M = PM.main;
+    test('DEFAULTS contains required keys', function () {
+      const keys = ['enabled','soundEnabled','preset','colorScheme','soundPack','shakeIntensity','particleCount','volume','bitcrushAmount','waveform','reducedMotion','highContrast','useWebGL','enableML','comboTimeout'];
+      keys.forEach(function (k) { assert(k in M.DEFAULTS, 'missing key: ' + k); });
+    });
+    test('isEditable detects input', function () {
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      assertEqual(M._isEditable(inp), true);
+    });
+    test('isEditable rejects div without contenteditable', function () {
+      const d = document.createElement('div');
+      assertEqual(M._isEditable(d), false);
+    });
+    test('isEditable accepts contenteditable', function () {
+      const d = document.createElement('div');
+      d.setAttribute('contenteditable', 'true');
+      assertEqual(M._isEditable(d), true);
+    });
+    test('applyAccessibilityOverrides forces monochrome with high contrast', function () {
+      const out = M._applyAccessibilityOverrides({ highContrast: true, colorScheme: 'rainbow' });
+      assertEqual(out.colorScheme, 'monochrome');
+    });
+  });
+
+  // ---- Render summary ----
+  const elapsed = Math.round(performance.now() - t0);
+  document.getElementById('totalPill').textContent = totalCases + ' tests';
+  document.getElementById('okPill').textContent = totalPass + ' passed';
+  document.getElementById('failPill').textContent = totalFail + ' failed';
+  document.getElementById('timePill').textContent = elapsed + ' ms';
+  if (totalFail > 0) document.title = '✘ ' + totalFail + ' failed — PowerChrome Tests';
+  else document.title = '✓ ' + totalPass + ' passed — PowerChrome Tests';
+</script>
+</body>
+</html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PowerChrome</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <h1>⚡ PowerChrome</h1>
+    <span id="fps" class="fps" title="Frames per second (active tab)">— fps</span>
+  </header>
+
+  <section class="row toggles">
+    <label class="switch">
+      <input type="checkbox" id="enabled">
+      <span class="track"></span>
+      <span class="lbl">Power Mode</span>
+    </label>
+    <label class="switch">
+      <input type="checkbox" id="soundEnabled">
+      <span class="track"></span>
+      <span class="lbl">Sound</span>
+    </label>
+  </section>
+
+  <section>
+    <h2>Preset</h2>
+    <div class="chips" id="presetChips">
+      <button data-preset="default" type="button">Default</button>
+      <button data-preset="subtle" type="button">Subtle</button>
+      <button data-preset="intense" type="button">Intense</button>
+      <button data-preset="retro" type="button">Retro</button>
+      <button data-preset="minimal" type="button">Minimal</button>
+    </div>
+  </section>
+
+  <section class="grid-2">
+    <div>
+      <h2>Colors</h2>
+      <select id="colorScheme">
+        <option value="rainbow">Rainbow</option>
+        <option value="pastel">Pastel</option>
+        <option value="neon">Neon</option>
+        <option value="monochrome">Monochrome</option>
+        <option value="fire">Fire</option>
+        <option value="ocean">Ocean</option>
+      </select>
+    </div>
+    <div>
+      <h2>Sound pack</h2>
+      <select id="soundPack">
+        <option value="default">Default</option>
+        <option value="arcade">Arcade</option>
+        <option value="synth">Synth</option>
+        <option value="retro">Retro</option>
+      </select>
+    </div>
+  </section>
+
+  <section class="sliders">
+    <h2>Intensity</h2>
+    <label>
+      <span>Shake</span>
+      <input type="range" id="shakeIntensity" min="1" max="10" step="1">
+      <output id="shakeIntensityVal"></output>
+    </label>
+    <label>
+      <span>Particles</span>
+      <input type="range" id="particleCount" min="5" max="30" step="1">
+      <output id="particleCountVal"></output>
+    </label>
+    <label>
+      <span>Volume</span>
+      <input type="range" id="volume" min="0" max="100" step="1">
+      <output id="volumeVal"></output>
+    </label>
+    <label>
+      <span>Bitcrush</span>
+      <input type="range" id="bitcrushAmount" min="0" max="100" step="1">
+      <output id="bitcrushAmountVal"></output>
+    </label>
+  </section>
+
+  <section>
+    <h2>Waveform</h2>
+    <select id="waveform">
+      <option value="auto">Auto (per-key)</option>
+      <option value="sine">Sine</option>
+      <option value="square">Square</option>
+      <option value="sawtooth">Sawtooth</option>
+      <option value="triangle">Triangle</option>
+    </select>
+  </section>
+
+  <section>
+    <h2>Accessibility</h2>
+    <div class="row toggles">
+      <label class="switch">
+        <input type="checkbox" id="reducedMotion">
+        <span class="track"></span>
+        <span class="lbl">Reduced motion</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="highContrast">
+        <span class="track"></span>
+        <span class="lbl">High contrast</span>
+      </label>
+    </div>
+  </section>
+
+  <section>
+    <h2>Advanced</h2>
+    <div class="row toggles">
+      <label class="switch">
+        <input type="checkbox" id="useWebGL">
+        <span class="track"></span>
+        <span class="lbl">WebGL renderer</span>
+      </label>
+      <label class="switch">
+        <input type="checkbox" id="enableML">
+        <span class="track"></span>
+        <span class="lbl">Personalize (learn)</span>
+      </label>
+    </div>
+  </section>
+
+  <footer>
+    <button id="reset" type="button">Reset to defaults</button>
+    <div class="hint">⌃⇧P toggle · ⌃⇧S sound</div>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
