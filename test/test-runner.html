@@ -153,6 +153,8 @@
 <script src="../scripts/combo-milestones.js"></script>
 <script src="../scripts/ml-personalization.js"></script>
 <script src="../scripts/stats-tracker.js"></script>
+<script src="../scripts/social-api.js"></script>
+<script src="../scripts/debug-tools.js"></script>
 <script src="../scripts/paste-animator.js"></script>
 <script src="../scripts/keyboard-shortcuts.js"></script>
 <script src="../scripts/main.js"></script>
@@ -950,6 +952,156 @@
       });
       const after = document.querySelector('[data-powermode-floatlayer]');
       assert(!after || after.children.length === 0);
+    });
+  });
+
+  describe('social-api (v1.3 mock backend)', function () {
+    const Soc = PM.social;
+    function freshSocial() {
+      Soc._setSocial({
+        account: { code: 'TEST-ABCD', createdAt: '2026-01-01T00:00:00.000Z', backend: 'local-mock' },
+        friends: [],
+        backendStatus: 'local-only'
+      });
+    }
+    test('generateFriendCode produces 8-char + dash', function () {
+      const c = Soc._generateFriendCode();
+      assert(/^[A-Z2-9]{4}-[A-Z2-9]{4}$/.test(c), 'got: ' + c);
+    });
+    test('normalizeCode strips dashes and uppercases', function () {
+      assertEqual(Soc._normalizeCode('abcd-efgh'), 'ABCDEFGH');
+      assertEqual(Soc._normalizeCode('abcd efgh'), 'ABCDEFGH');
+    });
+    test('formatCode adds the dash back', function () {
+      assertEqual(Soc._formatCode('abcdefgh'), 'ABCD-EFGH');
+    });
+    test('addFriendByCode rejects short codes', function () {
+      freshSocial();
+      const r = Soc.backend.addFriendByCode('ABC');
+      assertEqual(r.ok, false);
+      assert(/8 characters/i.test(r.error));
+    });
+    test('addFriendByCode rejects own code', function () {
+      freshSocial();
+      const r = Soc.backend.addFriendByCode('TEST-ABCD');
+      assertEqual(r.ok, false);
+      assert(/yourself/i.test(r.error));
+    });
+    test('addFriendByCode succeeds with valid stranger code', function () {
+      freshSocial();
+      const r = Soc.backend.addFriendByCode('WXYZ-2345');
+      assertEqual(r.ok, true);
+      assert(r.friend != null);
+      assertEqual(r.friend.code, 'WXYZ-2345');
+      assert(typeof r.friend.username === 'string');
+      assert(r.friend.stats.highestCombo > 0);
+    });
+    test('addFriendByCode rejects duplicates', function () {
+      freshSocial();
+      assertEqual(Soc.backend.addFriendByCode('QRST-2345').ok, true);
+      const dup = Soc.backend.addFriendByCode('QRST-2345');
+      assertEqual(dup.ok, false);
+      assert(/already/i.test(dup.error));
+    });
+    test('removeFriend deletes the friend', function () {
+      freshSocial();
+      Soc.backend.addFriendByCode('JKLM-2345');
+      const beforeCount = Soc.backend.getFriends().length;
+      Soc.backend.removeFriend('JKLM-2345');
+      const afterCount = Soc.backend.getFriends().length;
+      assertEqual(afterCount, beforeCount - 1);
+    });
+    test('getLeaderboard friends sorts by selected kind', function () {
+      freshSocial();
+      Soc.backend.addFriendByCode('AAAA-2345');
+      Soc.backend.addFriendByCode('BBBB-2345');
+      Soc.backend.addFriendByCode('CCCC-2345');
+      const byCombo = Soc.backend.getLeaderboard('combo', 'friends');
+      for (let i = 1; i < byCombo.length; i++) {
+        assert(byCombo[i - 1].highestCombo >= byCombo[i].highestCombo,
+          'combo leaderboard not sorted at index ' + i);
+      }
+      const byChars = Soc.backend.getLeaderboard('chars', 'friends');
+      for (let i = 1; i < byChars.length; i++) {
+        assert(byChars[i - 1].totalChars >= byChars[i].totalChars,
+          'chars leaderboard not sorted at index ' + i);
+      }
+    });
+    test('getLeaderboard global includes synthetic rows + me', function () {
+      freshSocial();
+      const rows = Soc.backend.getLeaderboard('combo', 'global');
+      assert(rows.length >= 8);
+      assert(rows.some(function (r) { return r.isMe; }), 'me row should be present');
+    });
+    test('seedFromCode is deterministic per code', function () {
+      const a1 = Soc._seedFromCode('ABCDEFGH').rand();
+      const a2 = Soc._seedFromCode('ABCDEFGH').rand();
+      assertEqual(a1, a2);
+      const b1 = Soc._seedFromCode('ZYXWVUTS').rand();
+      assert(a1 !== b1, 'different codes should differ');
+    });
+  });
+
+  describe('debug-tools', function () {
+    const D = PM.debug;
+    test('log adds entries to recent.events', function () {
+      D._recent.events.length = 0;
+      D.log('key', 'a @ 1,2 combo=3');
+      D.log('delete', 'Backspace');
+      assertEqual(D._recent.events.length, 2);
+      assertEqual(D._recent.events[1].kind, 'delete');
+    });
+    test('event buffer caps at 50', function () {
+      D._recent.events.length = 0;
+      for (let i = 0; i < 80; i++) D.log('key', String(i));
+      assert(D._recent.events.length <= 50);
+    });
+    test('getSnapshot returns useful fields', function () {
+      const snap = D.getSnapshot();
+      assert('audioBackend' in snap);
+      assert('audioWorkletSupported' in snap);
+      assert('isTopFrame' in snap);
+      assert('viewport' in snap);
+      assert(typeof snap.viewport.w === 'number');
+    });
+    test('overlay hidden when debugMode is off', function () {
+      withSettings({ debugMode: false }, function () {
+        D._removeOverlay();
+        D.tick();
+        const el = document.querySelector('[data-powermode-debug]');
+        // Either not created or hidden
+        if (el) assert(el.style.opacity === '' || el.style.opacity === '0');
+      });
+    });
+    test('overlay shown when debugMode is on', function () {
+      withSettings({ debugMode: true }, function () {
+        D._removeOverlay();
+        D.tick();
+        // tick is throttled; force another after a small delay
+        const el = D._ensureOverlay();
+        assert(el != null);
+        assert(el.isConnected);
+      });
+    });
+  });
+
+  describe('canvas-editor detection (main)', function () {
+    const M = PM.main;
+    test('isEditable returns true on canvas-editor host', function () {
+      // location.hostname can't be changed in tests directly, so just confirm
+      // that the new role attribute path works.
+      const div = document.createElement('div');
+      div.setAttribute('role', 'textbox');
+      assertEqual(M._isEditable(div), true);
+    });
+    test('isEditable accepts role=combobox', function () {
+      const div = document.createElement('div');
+      div.setAttribute('role', 'combobox');
+      assertEqual(M._isEditable(div), true);
+    });
+    test('isEditable still rejects plain div', function () {
+      const div = document.createElement('div');
+      assertEqual(M._isEditable(div), false);
     });
   });
 

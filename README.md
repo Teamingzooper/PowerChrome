@@ -55,14 +55,28 @@ Bring the satisfying dopamine of [Activate Power Mode](https://github.com/disclo
 - **Combo spam detection** — holding a key or hammering the same character pauses your combo (so it doesn't grow off-cheating) without resetting your existing streak. Spam stops the moment you actually type something different.
 - **Backspace + Delete** stay imploding red particles with a short downward thunk, and they never break a streak.
 
-### Stats & profile (v1.2)
+### Stats, profile & social (v1.3)
 
 - Open a full **stats dashboard** in a new tab from the popup's **More → Open stats / profile** button (also lives at `chrome-extension://<id>/stats.html`).
 - Tracks **highest combo**, **total characters typed**, **longest streak**, **total active time**, **backspace ratio**, **pastes animated**, and the **last 30 days** as a bar chart.
 - **Per-site top 10** so you can see which sites you actually type on.
 - **Milestones unlocked** count — every time you hit fireworks / galaxy / tornado / supernova / black hole / big bang / universe is recorded.
 - **Profile** — pick a username and an emoji avatar.
-- **Local-only leaderboard** today, with global/friends leaderboards reserved for a future release. Stats are stored locally and would sync upward when the backend ships.
+- **Friend codes** — every install auto-generates an 8-char code (e.g. `WXYZ-2345`). Copy it from the dashboard, share it with a friend, and add their code via the "Add a friend" form.
+- **Leaderboards** with segmented controls: by highest combo / characters typed, scoped to friends or global. Synthetic global rows make the view feel alive in local-only mode.
+- **Backend banner** — clearly labels whether you're running on the local mock backend or a real one. Currently always local. Plugging in a real backend is a straight swap in `scripts/social-api.js`.
+
+### Debugging (v1.3)
+
+- Toggle **More → Debug → Show debug HUD** in the popup for an in-page overlay with live FPS, particle count, current combo, audio backend (`worklet` / `scriptProcessor` / `passthrough`), last event, last error.
+- A **Diagnostics** card on the stats page shows the same data plus AudioWorklet support, account info, and the active backend. Useful for filing issues.
+- The bitcrusher now uses an **AudioWorklet** (worker thread, no main-thread blocking, no deprecation warnings); it falls back to `ScriptProcessorNode` only if `audioWorklet` isn't available in the browser.
+
+### Site coverage (v1.3)
+
+- Content scripts now inject into **all frames** (with safeguards against tiny ad iframes) so editors-in-iframes work — Google Docs / Sheets / Slides, Figma, embedded CodeMirror, etc.
+- **Canvas-rendered editors** (Google Docs and friends, which render text to a canvas instead of the DOM) get a dedicated caret-resolution fallback: known caret markers like `.kix-cursor` are measured first, then last mouse position, then editor center. Particles still spawn at a sensible location even when the DOM has nothing to measure.
+- Elements with `role="textbox"` / `combobox` / `searchbox` are now recognized as editable, covering rich-text frameworks that don't use real `contenteditable`.
 
 ### Keyboard shortcuts
 - `Ctrl+Shift+P` — toggle Power Mode on/off

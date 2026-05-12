@@ -33,6 +33,7 @@ const DEFAULTS = {
   enterFlash: true,
   floatInChars: false,
   spamDetection: true,
+  debugMode: false,
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -427,6 +428,7 @@ function refresh() {
   $('#enterFlash').checked = !!state.enterFlash;
   $('#floatInChars').checked = !!state.floatInChars;
   $('#spamDetection').checked = !!state.spamDetection;
+  $('#debugMode').checked = !!state.debugMode;
 
   $$('#presetChips button').forEach(function (b) {
     b.classList.toggle('active', b.dataset.preset === state.preset);
@@ -452,6 +454,7 @@ function bindBasics() {
   bindCheckbox('enterFlash', 'enterFlash');
   bindCheckbox('floatInChars', 'floatInChars');
   bindCheckbox('spamDetection', 'spamDetection');
+  bindCheckbox('debugMode', 'debugMode');
 
   bindSelect('colorScheme', 'colorScheme', updateCustomColorsVisibility);
   bindSelect('soundPack', 'soundPack');

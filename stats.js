@@ -26,25 +26,14 @@
   function defaultStats() {
     return {
       profile: { username: '', avatar: '⚡' },
-      totalChars: 0,
-      totalDeletes: 0,
-      totalPastes: 0,
-      totalPasteChars: 0,
-      totalEnters: 0,
-      highestCombo: 0,
-      longestStreakMs: 0,
-      totalActiveMs: 0,
-      charsPerDay: {},
-      charsBySite: {},
-      milestonesHit: {},
-      firstUseDate: '',
-      lastUseDate: ''
+      totalChars: 0, totalDeletes: 0, totalPastes: 0, totalPasteChars: 0,
+      totalEnters: 0, highestCombo: 0, longestStreakMs: 0, totalActiveMs: 0,
+      charsPerDay: {}, charsBySite: {}, milestonesHit: {},
+      firstUseDate: '', lastUseDate: ''
     };
   }
 
-  function formatInt(n) {
-    return (n || 0).toLocaleString('en-US');
-  }
+  function formatInt(n) { return (n || 0).toLocaleString('en-US'); }
   function formatDuration(ms) {
     ms = Math.max(0, Math.floor(ms || 0));
     const sec = Math.floor(ms / 1000);
@@ -52,8 +41,7 @@
     const min = Math.floor(sec / 60);
     if (min < 60) return min + 'm';
     const hr = Math.floor(min / 60);
-    const remMin = min % 60;
-    if (hr < 24) return hr + 'h ' + remMin + 'm';
+    if (hr < 24) return hr + 'h ' + (min % 60) + 'm';
     const days = Math.floor(hr / 24);
     return days + 'd ' + (hr % 24) + 'h';
   }
@@ -71,46 +59,54 @@
     return d;
   }
 
-  /* ---------------- Render ---------------- */
-  function render(stats) {
-    // Profile
-    const profile = stats.profile || { username: '', avatar: '⚡' };
+  let currentStats = defaultStats();
+  let lbKind = 'combo';   // 'combo' | 'chars'
+  let lbScope = 'friends';
+  let diagInterval = null;
+
+  /* ---------------- Profile ---------------- */
+  function renderProfile() {
+    const profile = currentStats.profile || { username: '', avatar: '⚡' };
     $('#avatarBtn').textContent = profile.avatar || '⚡';
     if (document.activeElement !== $('#username')) {
       $('#username').value = profile.username || '';
     }
-    $('#profileSince').textContent = 'First use: ' + (stats.firstUseDate || isoDate());
+    $('#profileSince').textContent = 'First use: ' + (currentStats.firstUseDate || isoDate());
+  }
 
-    // Hero
-    $('#statHighestCombo').textContent = formatInt(stats.highestCombo);
-    $('#statHighestComboSub').textContent = stats.highestCombo >= 1000 ? 'universe-tier!'
-      : stats.highestCombo >= 500 ? 'big bang reached'
-      : stats.highestCombo >= 100 ? 'supernova reached'
-      : stats.highestCombo >= 10 ? 'milestone reached'
-      : stats.highestCombo > 0 ? 'just getting started'
+  /* ---------------- Hero stats ---------------- */
+  function renderHero() {
+    $('#statHighestCombo').textContent = formatInt(currentStats.highestCombo);
+    $('#statHighestComboSub').textContent = currentStats.highestCombo >= 1000 ? 'universe-tier!'
+      : currentStats.highestCombo >= 500 ? 'big bang reached'
+      : currentStats.highestCombo >= 100 ? 'supernova reached'
+      : currentStats.highestCombo >= 10 ? 'milestone reached'
+      : currentStats.highestCombo > 0 ? 'just getting started'
       : 'no streak yet';
 
-    $('#statTotalChars').textContent = formatInt(stats.totalChars);
-    const siteCount = Object.keys(stats.charsBySite || {}).length;
+    $('#statTotalChars').textContent = formatInt(currentStats.totalChars);
+    const siteCount = Object.keys(currentStats.charsBySite || {}).length;
     $('#statTotalCharsSub').textContent = siteCount
       ? 'across ' + siteCount + ' site' + (siteCount === 1 ? '' : 's')
       : 'across all sites';
 
-    $('#statLongestStreak').textContent = formatDuration(stats.longestStreakMs);
-    $('#statActiveTime').textContent = formatDuration(stats.totalActiveMs);
-    const firstDay = stats.firstUseDate ? new Date(stats.firstUseDate) : new Date();
+    $('#statLongestStreak').textContent = formatDuration(currentStats.longestStreakMs);
+    $('#statActiveTime').textContent = formatDuration(currentStats.totalActiveMs);
+    const firstDay = currentStats.firstUseDate ? new Date(currentStats.firstUseDate) : new Date();
     const daysActive = Math.max(1, Math.floor((Date.now() - firstDay.getTime()) / 86400000) + 1);
     $('#statActiveTimeSub').textContent = 'across ' + daysActive + ' day' + (daysActive === 1 ? '' : 's');
 
-    $('#statTotalDeletes').textContent = formatInt(stats.totalDeletes);
-    const total = (stats.totalChars || 0) + (stats.totalDeletes || 0);
-    const ratio = total ? Math.round((stats.totalDeletes / total) * 100) : 0;
+    $('#statTotalDeletes').textContent = formatInt(currentStats.totalDeletes);
+    const total = (currentStats.totalChars || 0) + (currentStats.totalDeletes || 0);
+    const ratio = total ? Math.round((currentStats.totalDeletes / total) * 100) : 0;
     $('#statDeleteRatio').textContent = ratio + '% of all keystrokes';
 
-    $('#statTotalPastes').textContent = formatInt(stats.totalPastes);
-    $('#statPasteCharsSub').textContent = formatInt(stats.totalPasteChars) + ' chars eased in';
+    $('#statTotalPastes').textContent = formatInt(currentStats.totalPastes);
+    $('#statPasteCharsSub').textContent = formatInt(currentStats.totalPasteChars) + ' chars eased in';
+  }
 
-    // Chart (last 30 days)
+  /* ---------------- Chart + lists ---------------- */
+  function renderChart() {
     const chart = $('#dayChart');
     chart.innerHTML = '';
     const days = [];
@@ -120,8 +116,8 @@
     for (let i = 29; i >= 0; i--) {
       const d = daysAgo(i);
       const key = isoDate(d);
-      const val = (stats.charsPerDay && stats.charsPerDay[key]) || 0;
-      days.push({ key: key, date: d, val: val });
+      const val = (currentStats.charsPerDay && currentStats.charsPerDay[key]) || 0;
+      days.push({ key: key, val: val });
       if (val > maxVal) { maxVal = val; peakDay = { key: key, val: val }; }
       totalChartChars += val;
     }
@@ -137,12 +133,13 @@
     $('#chartPeak').textContent = peakDay && peakDay.val
       ? 'Peak day: ' + peakDay.key + ' · ' + formatInt(peakDay.val)
       : 'Peak day: —';
+  }
 
-    // Top sites
+  function renderSites() {
     const siteList = $('#siteList');
     siteList.innerHTML = '';
-    const sites = Object.keys(stats.charsBySite || {}).map(function (k) {
-      return { host: k, count: stats.charsBySite[k] };
+    const sites = Object.keys(currentStats.charsBySite || {}).map(function (k) {
+      return { host: k, count: currentStats.charsBySite[k] };
     }).sort(function (a, b) { return b.count - a.count; }).slice(0, 10);
     sites.forEach(function (s, idx) {
       const li = document.createElement('li');
@@ -155,19 +152,18 @@
       const count = document.createElement('span');
       count.className = 'count';
       count.textContent = formatInt(s.count);
-      li.appendChild(rank);
-      li.appendChild(host);
-      li.appendChild(count);
+      li.appendChild(rank); li.appendChild(host); li.appendChild(count);
       siteList.appendChild(li);
     });
+  }
 
-    // Milestones
+  function renderMilestones() {
     const msList = $('#milestoneList');
     msList.innerHTML = '';
     const ORDER = ['fireworks', 'galaxy', 'tornado', 'supernova', 'blackhole', 'bigbang', 'universe'];
     let anyMilestone = false;
     ORDER.forEach(function (name) {
-      const c = (stats.milestonesHit && stats.milestonesHit[name]) || 0;
+      const c = (currentStats.milestonesHit && currentStats.milestonesHit[name]) || 0;
       if (c === 0) return;
       anyMilestone = true;
       const li = document.createElement('li');
@@ -180,21 +176,142 @@
       const ct = document.createElement('span');
       ct.className = 'count';
       ct.textContent = '×' + c;
-      li.appendChild(rank);
-      li.appendChild(n);
-      li.appendChild(ct);
+      li.appendChild(rank); li.appendChild(n); li.appendChild(ct);
       msList.appendChild(li);
     });
-    if (!anyMilestone) {
-      msList.innerHTML = '';
-    }
+    if (!anyMilestone) msList.innerHTML = '';
+  }
 
-    // Local-only leaderboard "me" rows
-    const meName = (profile.username || 'you') + ' ' + (profile.avatar || '');
-    $('#lbComboMeName').textContent = meName;
-    $('#lbComboMeVal').textContent = formatInt(stats.highestCombo);
-    $('#lbCharsMeName').textContent = meName;
-    $('#lbCharsMeVal').textContent = formatInt(stats.totalChars);
+  /* ---------------- Social ---------------- */
+  function getBackend() {
+    return window.__powerMode && window.__powerMode.social && window.__powerMode.social.backend;
+  }
+
+  function ensureSocialLoaded(cb) {
+    const social = window.__powerMode && window.__powerMode.social;
+    if (!social) return cb();
+    // stats-tracker needs to be primed too so backend can pull profile/highestCombo/totalChars
+    if (window.__powerMode.stats) {
+      window.__powerMode.stats._setStats(currentStats);
+    }
+    social.init(function () { cb(); });
+  }
+
+  function renderBackendBanner() {
+    const be = getBackend();
+    const status = be ? be.getStatus() : { backend: 'unknown' };
+    const isLocal = status.backend === 'local-mock' || status.backend === 'local-only';
+    $('#backendDot').classList.toggle('ok', !isLocal);
+    $('#backendLabel').textContent = isLocal
+      ? 'Local-only mode (' + status.backend + ')'
+      : 'Connected to ' + status.backend;
+  }
+
+  function renderMyCode() {
+    const be = getBackend();
+    if (!be) return;
+    const acc = be.getMyAccount();
+    $('#myCode').textContent = acc.code || '— — — —';
+  }
+
+  function renderFriendList() {
+    const be = getBackend();
+    const list = $('#friendList');
+    list.innerHTML = '';
+    if (!be) return;
+    const rows = be.getFriends().filter(function (r) { return !r.isMe; });
+    rows.forEach(function (f) {
+      const row = document.createElement('li');
+      row.className = 'friend-row';
+
+      const avatar = document.createElement('span');
+      avatar.className = 'friend-avatar';
+      avatar.textContent = f.avatar || '🙂';
+
+      const meta = document.createElement('div');
+      meta.className = 'friend-meta';
+      const name = document.createElement('span');
+      name.className = 'friend-name';
+      name.textContent = f.name;
+      const code = document.createElement('span');
+      code.className = 'friend-code-mini';
+      code.textContent = f.code;
+      meta.appendChild(name); meta.appendChild(code);
+
+      const stat = document.createElement('span');
+      stat.className = 'friend-stat';
+      stat.textContent = formatInt(f.highestCombo) + ' combo · ' + formatInt(f.totalChars) + ' chars';
+
+      const rm = document.createElement('button');
+      rm.className = 'remove-friend';
+      rm.type = 'button';
+      rm.textContent = '×';
+      rm.title = 'Remove';
+      rm.addEventListener('click', function () {
+        be.removeFriend(f.code);
+        renderFriendList();
+        renderLeaderboard();
+      });
+
+      row.appendChild(avatar); row.appendChild(meta); row.appendChild(stat); row.appendChild(rm);
+      list.appendChild(row);
+    });
+  }
+
+  function renderLeaderboard() {
+    const be = getBackend();
+    const list = $('#lbList');
+    list.innerHTML = '';
+    if (!be) return;
+    const rows = be.getLeaderboard(lbKind, lbScope);
+    rows.forEach(function (r, idx) {
+      const li = document.createElement('li');
+      if (r.isMe) li.classList.add('lb-me');
+      const rank = document.createElement('span');
+      rank.className = 'rank';
+      rank.textContent = (idx + 1);
+      const av = document.createElement('span');
+      av.className = 'lb-avatar';
+      av.textContent = r.avatar || '🙂';
+      const nm = document.createElement('span');
+      nm.className = 'lb-name';
+      nm.textContent = (r.isMe ? '★ ' : '') + (r.name || '—');
+      const v = document.createElement('span');
+      v.className = 'lb-val';
+      v.textContent = lbKind === 'chars' ? formatInt(r.totalChars) : formatInt(r.highestCombo);
+      li.appendChild(rank); li.appendChild(av); li.appendChild(nm); li.appendChild(v);
+      list.appendChild(li);
+    });
+  }
+
+  /* ---------------- Diagnostics ---------------- */
+  function renderDiagnostics() {
+    const grid = $('#diagGrid');
+    grid.innerHTML = '';
+    const PM = window.__powerMode || {};
+    const snap = PM.debug ? PM.debug.getSnapshot() : null;
+    const audio = snap ? snap.audioBackend : 'n/a';
+    const worklet = snap ? snap.audioWorkletSupported : (typeof AudioWorkletNode !== 'undefined');
+    const social = PM.social && PM.social.backend ? PM.social.backend.getStatus() : { backend: 'n/a' };
+    const entries = [
+      ['extension', '1.3.0'],
+      ['audio backend', audio, audio === 'worklet' ? 'ok' : (audio === 'scriptProcessor' ? 'warn' : '')],
+      ['AudioWorkletNode', worklet ? 'supported' : 'unsupported', worklet ? 'ok' : 'warn'],
+      ['social backend', social.backend, social.backend === 'local-mock' ? 'warn' : 'ok'],
+      ['friend code', social.myCode || '—'],
+      ['account created', social.createdAt ? new Date(social.createdAt).toLocaleString() : '—']
+    ];
+    entries.forEach(function (e) {
+      const row = document.createElement('div');
+      const k = document.createElement('span');
+      k.className = 'diag-key';
+      k.textContent = e[0];
+      const v = document.createElement('span');
+      v.className = 'diag-val' + (e[2] ? ' ' + e[2] : '');
+      v.textContent = e[1];
+      row.appendChild(k); row.appendChild(v);
+      grid.appendChild(row);
+    });
   }
 
   /* ---------------- Avatar picker ---------------- */
@@ -210,7 +327,9 @@
         currentStats.profile = currentStats.profile || {};
         currentStats.profile.avatar = em;
         save();
-        render(currentStats);
+        renderProfile();
+        renderFriendList();
+        renderLeaderboard();
         $('#avatarPicker').hidden = true;
       });
       grid.appendChild(b);
@@ -218,8 +337,6 @@
   }
 
   /* ---------------- Persistence ---------------- */
-  let currentStats = defaultStats();
-
   function save() {
     const obj = {};
     obj[STATS_KEY] = currentStats;
@@ -237,6 +354,19 @@
     });
   }
 
+  function renderAll() {
+    renderProfile();
+    renderHero();
+    renderChart();
+    renderSites();
+    renderMilestones();
+    renderBackendBanner();
+    renderMyCode();
+    renderFriendList();
+    renderLeaderboard();
+    renderDiagnostics();
+  }
+
   /* ---------------- Bindings ---------------- */
   function bind() {
     $('#avatarBtn').addEventListener('click', function () {
@@ -250,11 +380,8 @@
       currentStats.profile = currentStats.profile || {};
       currentStats.profile.username = (e.target.value || '').slice(0, 24);
       save();
-      // Update leaderboard names live
-      const profile = currentStats.profile;
-      const meName = (profile.username || 'you') + ' ' + (profile.avatar || '');
-      $('#lbComboMeName').textContent = meName;
-      $('#lbCharsMeName').textContent = meName;
+      renderFriendList();
+      renderLeaderboard();
     });
 
     $('#resetStats').addEventListener('click', function () {
@@ -264,31 +391,94 @@
       currentStats.profile = preservedProfile;
       currentStats.firstUseDate = isoDate();
       save();
-      render(currentStats);
+      renderAll();
     });
 
-    // Live sync if extension is updating stats while page is open
+    $('#copyCode').addEventListener('click', function () {
+      const code = $('#myCode').textContent;
+      try {
+        navigator.clipboard.writeText(code);
+      } catch (e) { /* clipboard may be denied in some contexts */ }
+      const fb = $('#copyFeedback');
+      fb.hidden = false;
+      setTimeout(function () { fb.hidden = true; }, 1500);
+    });
+
+    $('#friendCodeInput').addEventListener('input', function (e) {
+      const v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
+      e.target.value = v.length > 4 ? v.slice(0, 4) + '-' + v.slice(4) : v;
+      $('#friendError').hidden = true;
+    });
+
+    $('#addFriendForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      const be = getBackend();
+      if (!be) return;
+      const result = be.addFriendByCode($('#friendCodeInput').value);
+      if (result.ok) {
+        $('#friendCodeInput').value = '';
+        $('#friendError').hidden = true;
+        renderFriendList();
+        renderLeaderboard();
+      } else {
+        $('#friendError').textContent = result.error;
+        $('#friendError').hidden = false;
+      }
+    });
+
+    // Leaderboard seg controls
+    $$('.seg').forEach(function (seg) {
+      const segKind = seg.dataset.seg;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (segKind === 'kind') lbKind = b.dataset.val;
+          if (segKind === 'scope') lbScope = b.dataset.val;
+          renderLeaderboard();
+        });
+      });
+    });
+
+    // Live sync from content script
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
       chrome.storage.onChanged.addListener(function (changes, area) {
         if (area !== 'local') return;
-        if (!changes[STATS_KEY]) return;
-        const newVal = changes[STATS_KEY].newValue;
-        if (!newVal) return;
-        // Preserve username/avatar typed locally if the content script hasn't seen them yet
-        const localProfile = currentStats.profile;
-        currentStats = Object.assign(defaultStats(), newVal);
-        if (localProfile && (localProfile.username || (localProfile.avatar && localProfile.avatar !== '⚡'))) {
-          currentStats.profile = Object.assign({}, currentStats.profile, localProfile);
+        if (changes[STATS_KEY]) {
+          const newVal = changes[STATS_KEY].newValue;
+          if (newVal) {
+            const localProfile = currentStats.profile;
+            currentStats = Object.assign(defaultStats(), newVal);
+            if (localProfile && (localProfile.username || (localProfile.avatar && localProfile.avatar !== '⚡'))) {
+              currentStats.profile = Object.assign({}, currentStats.profile, localProfile);
+            }
+            renderHero();
+            renderChart();
+            renderSites();
+            renderMilestones();
+            renderLeaderboard();
+          }
         }
-        render(currentStats);
+        if (changes.powerModeSocial) {
+          renderFriendList();
+          renderLeaderboard();
+          renderMyCode();
+        }
       });
     }
   }
 
   document.addEventListener('DOMContentLoaded', function () {
     load(function () {
-      render(currentStats);
-      bind();
+      // Prime stats-tracker with our loaded data so social-api sees real numbers
+      if (window.__powerMode && window.__powerMode.stats) {
+        window.__powerMode.stats._setStats(currentStats);
+      }
+      ensureSocialLoaded(function () {
+        renderAll();
+        bind();
+        diagInterval = setInterval(renderDiagnostics, 5000);
+      });
     });
   });
 })();

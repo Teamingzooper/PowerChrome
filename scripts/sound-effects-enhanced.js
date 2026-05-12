@@ -4,6 +4,9 @@
   let ctx = null;
   let masterGain = null;
   let bitcrushNode = null;
+  let bitcrushKind = 'none'; // 'worklet' | 'scriptProcessor' | 'passthrough'
+  let workletReady = false;
+  let workletLoading = false;
   let currentPack = 'default';
   let volume = 0.5;
   let bitcrushAmount = 0.4;
@@ -15,16 +18,33 @@
   };
   const SCALE = [220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00];
 
+  function workletUrl() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
+        return chrome.runtime.getURL('scripts/bitcrush-worklet.js');
+      }
+    } catch (e) { /* not in extension context */ }
+    return 'scripts/bitcrush-worklet.js';
+  }
+
   function ensureCtx() {
-    if (ctx) return ctx;
+    if (ctx) {
+      // Late upgrade to worklet if it became available
+      if (!workletReady && !workletLoading && ctx.audioWorklet) tryUpgradeToWorklet();
+      return ctx;
+    }
     try {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return null;
       ctx = new AC();
       masterGain = ctx.createGain();
       masterGain.gain.value = volume;
-      bitcrushNode = makeBitcrusher(ctx);
+      // Start with a passthrough so play() works immediately. Upgrade to worklet
+      // (or fallback ScriptProcessor) as soon as we can without blocking sound.
+      bitcrushNode = ctx.createGain();
+      bitcrushKind = 'passthrough';
       bitcrushNode.connect(masterGain).connect(ctx.destination);
+      tryUpgradeToWorklet();
     } catch (e) {
       console.warn('[PowerChrome] AudioContext unavailable', e);
       ctx = null;
@@ -32,13 +52,57 @@
     return ctx;
   }
 
-  function makeBitcrusher(ac) {
-    if (!ac.createScriptProcessor) {
-      const passthrough = ac.createGain();
-      passthrough.gain.value = 1;
-      return passthrough;
+  function swapBitcrushNode(newNode, kind) {
+    if (!ctx) return;
+    try { bitcrushNode.disconnect(); } catch (e) { /* ignore */ }
+    bitcrushNode = newNode;
+    bitcrushKind = kind;
+    bitcrushNode.connect(masterGain);
+    applyBitcrushParam();
+  }
+
+  function applyBitcrushParam() {
+    if (bitcrushKind === 'worklet' && bitcrushNode && bitcrushNode.parameters) {
+      const p = bitcrushNode.parameters.get('amount');
+      if (p) p.setValueAtTime(bitcrushAmount, ctx.currentTime);
     }
-    const node = ac.createScriptProcessor(4096, 1, 1);
+    // ScriptProcessor + passthrough read the closure-level `bitcrushAmount` directly.
+  }
+
+  function tryUpgradeToWorklet() {
+    if (workletReady || workletLoading) return;
+    if (!ctx || !ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') {
+      // Worklet not supported — fall back to ScriptProcessor.
+      installScriptProcessorFallback();
+      return;
+    }
+    workletLoading = true;
+    ctx.audioWorklet.addModule(workletUrl()).then(function () {
+      try {
+        const node = new AudioWorkletNode(ctx, 'powerchrome-bitcrush', {
+          numberOfInputs: 1,
+          numberOfOutputs: 1,
+          outputChannelCount: [1]
+        });
+        workletReady = true;
+        workletLoading = false;
+        swapBitcrushNode(node, 'worklet');
+      } catch (e) {
+        console.warn('[PowerChrome] AudioWorkletNode construct failed, falling back', e);
+        workletLoading = false;
+        installScriptProcessorFallback();
+      }
+    }).catch(function (e) {
+      console.warn('[PowerChrome] AudioWorklet module load failed, falling back', e);
+      workletLoading = false;
+      installScriptProcessorFallback();
+    });
+  }
+
+  function installScriptProcessorFallback() {
+    if (!ctx || bitcrushKind !== 'passthrough') return;
+    if (!ctx.createScriptProcessor) return; // already on a passthrough; leave it
+    const node = ctx.createScriptProcessor(4096, 1, 1);
     let lastSample = 0;
     let phaser = 0;
     node.onaudioprocess = function (e) {
@@ -56,7 +120,7 @@
         out[i] = lastSample;
       }
     };
-    return node;
+    swapBitcrushNode(node, 'scriptProcessor');
   }
 
   function isDeleteKey(key) {
@@ -146,8 +210,12 @@
     playArpeggio: playArpeggio,
     setPack: function (n) { currentPack = n; },
     setVolume: function (v) { volume = v; if (masterGain) masterGain.gain.value = v; },
-    setBitcrush: function (a) { bitcrushAmount = Math.max(0, Math.min(1, a)); },
+    setBitcrush: function (a) {
+      bitcrushAmount = Math.max(0, Math.min(1, a));
+      applyBitcrushParam();
+    },
     setWaveformOverride: function (w) { waveformOverride = (!w || w === 'auto') ? null : w; },
+    getBackendKind: function () { return bitcrushKind; },
     _getPack: function () { return currentPack; },
     _keyFreq: keyFreq,
     _keyWaveform: function (k) {

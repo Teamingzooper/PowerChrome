@@ -32,6 +32,7 @@ const DEFAULTS = {
   enterFlash: true,
   floatInChars: false,
   spamDetection: true,
+  debugMode: false,
   milestones: {
     fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
     galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },

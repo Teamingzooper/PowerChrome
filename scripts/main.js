@@ -35,6 +35,7 @@
     enterFlash: true,
     floatInChars: false,
     spamDetection: true,
+    debugMode: false,
     milestones: {
       fireworks: { enabled: true, at: 10,   effect: 'fireworks' },
       galaxy:    { enabled: true, at: 20,   effect: 'galaxy' },
@@ -114,8 +115,13 @@
     let n = el;
     while (n) {
       if (n.isContentEditable) return true;
+      const role = n.getAttribute && n.getAttribute('role');
+      if (role === 'textbox' || role === 'combobox' || role === 'searchbox') return true;
       n = n.parentElement;
     }
+    // Canvas-rendered editors (Google Docs etc.) route keystrokes through hidden
+    // helpers; trust the host check rather than the target element.
+    if (isCanvasBasedEditorHost()) return true;
     return false;
   }
 
@@ -160,7 +166,49 @@
     }
   }
 
+  /* Some sites render their editor to canvas/SVG — Google Docs, Sheets, Slides,
+   * Figma, Notion's whiteboard. We can't measure DOM caret position there, so
+   * we fall back to the last mouse position (the user's gaze usually tracks the
+   * caret since they recently clicked to position it). If we have a known
+   * caret-marker selector for the site, we measure that first.
+   */
+  const CANVAS_EDITOR_HOSTS = [
+    /(^|\.)docs\.google\.com$/i,
+    /(^|\.)sheets\.google\.com$/i,
+    /(^|\.)slides\.google\.com$/i,
+    /(^|\.)figma\.com$/i
+  ];
+  const CARET_MARKER_SELECTORS = ['.kix-cursor', '.kix-cursor-caret', '.docs-text-ui-cursor-blink'];
+
+  function isCanvasBasedEditorHost() {
+    const h = (typeof location !== 'undefined' && location.hostname) ? location.hostname : '';
+    for (let i = 0; i < CANVAS_EDITOR_HOSTS.length; i++) {
+      if (CANVAS_EDITOR_HOSTS[i].test(h)) return true;
+    }
+    return false;
+  }
+
+  function findCanvasCaretRect() {
+    try {
+      for (let i = 0; i < CARET_MARKER_SELECTORS.length; i++) {
+        const el = document.querySelector(CARET_MARKER_SELECTORS[i]);
+        if (el) {
+          const r = el.getBoundingClientRect();
+          if (r && (r.width || r.height || r.left || r.top)) return r;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return null;
+  }
+
   function caretPos(el) {
+    if (isCanvasBasedEditorHost()) {
+      const r = findCanvasCaretRect();
+      if (r) return { x: r.left, y: r.top + r.height / 2 };
+      if (lastMouseX || lastMouseY) return { x: lastMouseX, y: lastMouseY };
+      const rect = el ? el.getBoundingClientRect() : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 0, height: 0 };
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    }
     const tag = (el.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea') return inputCaretPos(el);
     try {
@@ -323,6 +371,10 @@
       tfx.flashEnter();
       tfx.spawnCarriageReturnParticles(pos.x, pos.y);
     }
+    if (window.__powerMode.debug) {
+      const tag = deleteMode ? 'delete' : (enterMode ? 'enter' : (spammed ? 'spam' : 'key'));
+      window.__powerMode.debug.log(tag, e.key + ' @ ' + Math.round(pos.x) + ',' + Math.round(pos.y) + ' combo=' + combo);
+    }
     if (!deleteMode && !enterMode && tfx && e.key && e.key.length === 1) {
       tfx.floatChar(e.key, pos.x, pos.y);
     }
@@ -381,6 +433,7 @@
       }
     }
     if (window.__powerMode.vfx) window.__powerMode.vfx.tick();
+    if (window.__powerMode.debug) window.__powerMode.debug.tick();
 
     requestAnimationFrame(frame);
   }
@@ -451,8 +504,21 @@
     return false;
   }
 
+  function shouldInitInThisFrame() {
+    // Top frame: always.
+    if (window === window.top) return true;
+    // No body? Not an HTML document we can paint onto.
+    if (!document.body) return false;
+    // Skip tiny iframes (ads, tracking pixels, hidden mounting frames).
+    const w = window.innerWidth || 0;
+    const h = window.innerHeight || 0;
+    if (w < 120 || h < 80) return false;
+    return true;
+  }
+
   function init() {
     if (initialized) return;
+    if (!shouldInitInThisFrame()) return;
     initialized = true;
 
     if (hasChromeStorage()) {
@@ -462,6 +528,7 @@
           applySettings(applyAccessibilityOverrides(Object.assign({}, DEFAULTS, stored)));
           if (window.__powerMode.ml) window.__powerMode.ml.init();
           if (window.__powerMode.stats) window.__powerMode.stats.init();
+          if (window.__powerMode.social) window.__powerMode.social.init();
         });
       } catch (e) {
         applySettings(applyAccessibilityOverrides(DEFAULTS));
@@ -469,6 +536,7 @@
     } else {
       applySettings(applyAccessibilityOverrides(DEFAULTS));
       if (window.__powerMode.stats) window.__powerMode.stats.init();
+      if (window.__powerMode.social) window.__powerMode.social.init();
     }
 
     if (hasChromeRuntime()) {

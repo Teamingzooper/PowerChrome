@@ -181,11 +181,21 @@
         </label>
       </div>
 
-      <h2>Stats & profile</h2>
+      <h2>Stats, profile & friends</h2>
       <div class="palette-actions">
         <button id="openStats" type="button">Open stats / profile</button>
-        <span class="hint">Highest combo, characters typed, milestones, per-day chart, profile + (future) leaderboards.</span>
+        <span class="hint">Highest combo · characters typed · milestones · friend codes · leaderboards · diagnostics.</span>
       </div>
+
+      <h2>Debug</h2>
+      <div class="row toggles">
+        <label class="switch">
+          <input type="checkbox" id="debugMode">
+          <span class="track"></span>
+          <span class="lbl">Show debug HUD</span>
+        </label>
+      </div>
+      <p class="hint" style="margin-top:6px">Overlays an in-page debug box with FPS, particle count, last event, last error, and the active audio backend.</p>
 
       <h2>Disabled on these sites</h2>
       <div id="disabledList" class="domain-list"></div>
