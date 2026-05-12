@@ -89,9 +89,11 @@ Bring the satisfying dopamine of [Activate Power Mode](https://github.com/disclo
 - **Trail length slider** (0–12 segments) under **Particles → Trails & extras**. Set to 0 for crisp non-trailing particles, 12 for long comet streaks.
 - **Click bursts** toggle — every mouse click anywhere on the page spawns a tiny burst of particles. Off by default.
 
-### Real backend (v1.4)
+### Real backend (v1.4) — **live at `powerchrome-api.vercel.app`**
 
-The repo now ships a Node.js Vercel-deployable backend in [`server/`](server/) with:
+A live deployment of the server in [`server/`](server/) is already running at **`https://powerchrome-api.vercel.app`** with persistent Upstash Redis (KV) storage. That URL is also the extension's default — install v1.4.0+ and the social system is wired to the live backend out of the box.
+
+The deployment provides:
 
 - POST `/api/account/init` — generates a friend code + secret token
 - POST `/api/account/get` · `/api/account/update`

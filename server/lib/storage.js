@@ -67,12 +67,13 @@ async function get(key) {
 }
 
 async function set(key, value) {
-  const serialized = typeof value === 'string' ? value : JSON.stringify(value);
   if (HAS_KV) {
+    const serialized = typeof value === 'string' ? value : JSON.stringify(value);
     await kvCmd(['SET', key, serialized]);
     return;
   }
-  memSet(key, JSON.parse(serialized));
+  // Memory mode: store the live value as-is so primitives round-trip cleanly.
+  memSet(key, value);
 }
 
 async function del(key) {
