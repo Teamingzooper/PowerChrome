@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PowerChrome API</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(ellipse at top, #181f3a 0%, #07090f 60%) fixed;
+    color: #e7ecf2;
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+  }
+  main {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 48px 28px 80px;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 8px;
+  }
+  .logo {
+    font-size: 36px;
+    filter: drop-shadow(0 0 18px rgba(124,92,255,.55));
+  }
+  h1 {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 700;
+    background: linear-gradient(90deg, #7c5cff, #00d4ff);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .sub {
+    color: #95a0b4;
+    margin: 0 0 28px;
+  }
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(180deg, #161b2a, #0e121d);
+    border: 1px solid #2a2f3d;
+    border-radius: 12px;
+    padding: 14px 18px;
+    margin: 0 0 28px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+  }
+  .dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: #95a0b4;
+    box-shadow: 0 0 0 4px rgba(149,160,180,.18);
+    flex-shrink: 0;
+  }
+  .dot.ok { background: #34c759; box-shadow: 0 0 0 4px rgba(52,199,89,.18); }
+  .dot.warn { background: #ff9f0a; box-shadow: 0 0 0 4px rgba(255,159,10,.18); animation: pulse 2s ease-in-out infinite; }
+  .dot.bad { background: #ff3b30; box-shadow: 0 0 0 4px rgba(255,59,48,.18); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
+  .status-label { font-weight: 600; }
+  .status-sub {
+    font-size: 13px;
+    color: #95a0b4;
+    margin-top: 2px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  h2 {
+    margin: 28px 0 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    color: #95a0b4;
+  }
+  .endpoints {
+    display: grid;
+    gap: 8px;
+  }
+  .ep {
+    display: grid;
+    grid-template-columns: 60px 1fr;
+    gap: 12px;
+    align-items: center;
+    background: #161b2a;
+    border: 1px solid #2a2f3d;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 13px;
+  }
+  .method {
+    text-transform: uppercase;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 3px 8px;
+    border-radius: 4px;
+    text-align: center;
+  }
+  .method.GET { background: rgba(52,199,89,.18); color: #34c759; }
+  .method.POST { background: rgba(124,92,255,.22); color: #a59cff; }
+  .ep .path { color: #e7ecf2; }
+  .ep .desc {
+    grid-column: 2;
+    color: #6b7488;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .links {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 18px;
+  }
+  .links a {
+    color: #00d4ff;
+    text-decoration: none;
+    background: #161b2a;
+    border: 1px solid #2a2f3d;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    transition: border-color .15s ease, color .15s ease;
+  }
+  .links a:hover { border-color: #00d4ff; color: #fff; }
+  footer {
+    margin-top: 40px;
+    padding-top: 20px;
+    border-top: 1px solid #2a2f3d;
+    color: #6b7488;
+    font-size: 12px;
+  }
+  code {
+    background: #1f2535;
+    border: 1px solid #2a2f3d;
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <span class="logo">⚡</span>
+    <h1>PowerChrome API</h1>
+  </header>
+  <p class="sub">Backend for the <a href="https://github.com/Teamingzooper/PowerChrome" style="color:#00d4ff">PowerChrome</a> Chrome extension — accounts, friends, and leaderboards.</p>
+
+  <div class="status" id="status">
+    <span class="dot warn" id="dot"></span>
+    <div>
+      <div class="status-label" id="label">Checking status…</div>
+      <div class="status-sub" id="sub">contacting /api/health</div>
+    </div>
+  </div>
+
+  <h2>Endpoints</h2>
+  <div class="endpoints">
+    <div class="ep"><span class="method GET">GET</span><span class="path">/api/health</span><span class="desc">Service status + active storage backend</span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/account/init</span><span class="desc">Create an account. Body: <code>{ username, avatar }</code> → <code>{ friendCode, token }</code></span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/account/get</span><span class="desc">Fetch your own account. Auth via <code>{ token }</code>.</span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/account/update</span><span class="desc">Update username/avatar.</span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/stats/sync</span><span class="desc">Push counters. Server keeps the max — never lowers a stat.</span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/friends/add</span><span class="desc">Add by 8-char friend code (e.g. <code>ABCD-EFGH</code>).</span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/friends/remove</span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/friends/list</span></div>
+    <div class="ep"><span class="method POST">POST</span><span class="path">/api/leaderboard</span><span class="desc">Body: <code>{ kind: "combo"|"chars", scope: "friends"|"global", limit }</code></span></div>
+  </div>
+
+  <h2>Try it</h2>
+  <div class="links">
+    <a href="/api/health">/api/health</a>
+    <a href="https://github.com/Teamingzooper/PowerChrome">Source on GitHub</a>
+    <a href="https://github.com/Teamingzooper/PowerChrome/releases/latest">Download the extension</a>
+  </div>
+
+  <footer>
+    All counters are monotonic. Auth is per-account bearer token returned at <code>/api/account/init</code> — store it locally and treat it as a secret.<br>
+    Storage: Upstash Redis when <code>KV_REST_API_URL</code> / <code>KV_REST_API_TOKEN</code> are set; in-process Map fallback otherwise (data resets each cold start).
+  </footer>
+</main>
+
+<script>
+(async function () {
+  const dot = document.getElementById('dot');
+  const label = document.getElementById('label');
+  const sub = document.getElementById('sub');
+  try {
+    const t0 = performance.now();
+    const res = await fetch('/api/health', { cache: 'no-store' });
+    const ms = Math.round(performance.now() - t0);
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    dot.className = 'dot ' + (data.storage === 'kv' ? 'ok' : 'warn');
+    label.textContent = 'Online · storage: ' + data.storage;
+    sub.textContent = ms + 'ms · server time ' + (data.time || '').replace('T', ' ').replace('Z', ' UTC');
+  } catch (e) {
+    dot.className = 'dot bad';
+    label.textContent = 'Health check failed';
+    sub.textContent = String(e.message || e);
+  }
+})();
+</script>
+</body>
+</html>
