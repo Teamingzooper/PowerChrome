@@ -63,6 +63,32 @@
   let lbKind = 'combo';   // 'combo' | 'chars'
   let lbScope = 'friends';
   let diagInterval = null;
+  let profileSyncTimer = null;
+
+  function primeSharedStats() {
+    if (window.__powerMode && window.__powerMode.stats) {
+      window.__powerMode.stats._setStats(currentStats);
+    }
+  }
+
+  function scheduleProfileSync(immediate) {
+    clearTimeout(profileSyncTimer);
+    const social = window.__powerMode && window.__powerMode.social;
+    if (!social || !social.backend || !social.backend.updateProfile) return;
+    const profile = currentStats.profile || {};
+    const fire = function () {
+      Promise.resolve(social.backend.updateProfile({
+        username: profile.username || '',
+        avatar: profile.avatar || '⚡'
+      })).then(function () {
+        renderFriendList();
+        renderLeaderboard();
+        renderBackendBanner();
+      }).catch(function () { /* swallow */ });
+    };
+    if (immediate) fire();
+    else profileSyncTimer = setTimeout(fire, 400);
+  }
 
   /* ---------------- Profile ---------------- */
   function renderProfile() {
@@ -343,10 +369,12 @@
         currentStats.profile = currentStats.profile || {};
         currentStats.profile.avatar = em;
         save();
+        primeSharedStats();
         renderProfile();
         renderFriendList();
         renderLeaderboard();
         $('#avatarPicker').hidden = true;
+        scheduleProfileSync(true);
       });
       grid.appendChild(b);
     });
@@ -396,8 +424,10 @@
       currentStats.profile = currentStats.profile || {};
       currentStats.profile.username = (e.target.value || '').slice(0, 24);
       save();
+      primeSharedStats();
       renderFriendList();
       renderLeaderboard();
+      scheduleProfileSync(false);
     });
 
     $('#resetStats').addEventListener('click', function () {

@@ -270,7 +270,12 @@
     getFriends: function () { return getFriendsRows(); },
     getLeaderboard: function (kind, scope) { return getLeaderboard(kind, scope); },
     getStatus: function () { return getStatus(); },
-    resetFriends: resetFriends
+    resetFriends: resetFriends,
+    updateProfile: function () {
+      // Mock backend reads the profile from local stats every render, so there's
+      // nothing to push — just succeed.
+      return { ok: true };
+    }
   };
 
   /* ---------- Remote backend ---------- *
@@ -427,6 +432,34 @@
     }
   }
 
+  async function updateProfileOnRemote(profile) {
+    profile = profile || {};
+    try {
+      const acc = await ensureRemoteAccount();
+      const res = await apiPost('/api/account/update', {
+        token: acc.token,
+        username: profile.username,
+        avatar: profile.avatar
+      });
+      if (res && res.ok) {
+        markRemoteSuccess();
+        // Force fresh leaderboards so the updated name shows immediately.
+        await Promise.all([
+          refreshRemoteFriends(),
+          refreshRemoteLeaderboard('combo', 'friends'),
+          refreshRemoteLeaderboard('combo', 'global'),
+          refreshRemoteLeaderboard('chars', 'friends'),
+          refreshRemoteLeaderboard('chars', 'global')
+        ]);
+        return { ok: true, account: res.account };
+      }
+      return { ok: false, error: (res && res.error) || 'unknown' };
+    } catch (e) {
+      markRemoteFailure();
+      return { ok: false, error: 'network' };
+    }
+  }
+
   async function refreshRemoteFriends() {
     if (!remoteAccount || !remoteAccount.token) return [];
     try {
@@ -556,6 +589,7 @@
     syncStats: syncStatsToRemote,
     refreshFriends: refreshRemoteFriends,
     refreshLeaderboard: refreshRemoteLeaderboard,
+    updateProfile: updateProfileOnRemote,
     onChange: function (fn) { remoteListeners.push(fn); return function () { remoteListeners = remoteListeners.filter(function (x) { return x !== fn; }); }; }
   };
 
@@ -585,6 +619,11 @@
       getFriends: function () { return pickBackend().getFriends(); },
       getLeaderboard: function () { const b = pickBackend(); return b.getLeaderboard.apply(b, arguments); },
       getStatus: function () { return pickBackend().getStatus(); },
+      updateProfile: function () {
+        const b = pickBackend();
+        if (b.updateProfile) return b.updateProfile.apply(b, arguments);
+        return Promise.resolve({ ok: true });
+      },
       isRemoteOnline: function () { return !!REMOTE_CACHE.status.online; }
     };
   }
