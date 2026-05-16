@@ -86,6 +86,213 @@ const HEX_RE = /^#[0-9a-f]{6}$/i;
 const $ = function (sel) { return document.querySelector(sel); };
 const $$ = function (sel) { return document.querySelectorAll(sel); };
 
+/* ---------------- Account bar ---------------- *
+ * The popup mirrors a tiny subset of the stats page: avatar, username,
+ * friend code, online status, and a big "open stats" button. Editing
+ * username/avatar here writes to chrome.storage.local AND pushes to
+ * the live backend so leaderboards update without opening the stats tab.
+ */
+const ACCOUNT_KEY = 'powerModeAccount';
+const STATS_KEY = 'powerModeStats';
+const DEFAULT_BACKEND_URL = 'https://powerchrome-api.vercel.app';
+const ACCOUNT_AVATARS = [
+  '⚡','🔥','💥','✨','🌟','🚀','🎮','🎯','🎨',
+  '🎵','🎸','🎲','🧠','🦾','🤖','👾','🐉','🦊',
+  '🐱','🐺','🐧','🦉','🦋','🐙','🌈','🌌','🌊',
+  '🌋','☄️','🪐','🌀','🌪️','🔱','♾️','⚙️','🧩'
+];
+
+let acctState = {
+  friendCode: '',
+  token: '',
+  username: '',
+  avatar: '⚡'
+};
+let acctUsernameTimer = null;
+
+function loadAccount(cb) {
+  chrome.storage.local.get([ACCOUNT_KEY, STATS_KEY], function (res) {
+    const acct = (res && res[ACCOUNT_KEY]) || {};
+    const stats = (res && res[STATS_KEY]) || {};
+    const profile = (stats && stats.profile) || {};
+    acctState = {
+      friendCode: acct.friendCode || '',
+      token: acct.token || '',
+      username: profile.username || '',
+      avatar: profile.avatar || '⚡'
+    };
+    if (cb) cb();
+  });
+}
+
+function saveProfileLocal() {
+  chrome.storage.local.get([STATS_KEY], function (res) {
+    const cur = (res && res[STATS_KEY]) || {};
+    cur.profile = Object.assign({}, cur.profile || {}, {
+      username: acctState.username,
+      avatar: acctState.avatar
+    });
+    chrome.storage.local.set({ [STATS_KEY]: cur });
+  });
+}
+
+function backendUrl() {
+  const u = (state && state.backendUrl) || '';
+  return (u || DEFAULT_BACKEND_URL).replace(/\/$/, '');
+}
+
+async function pushProfileToBackend() {
+  if (!acctState.token) return;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(function () { ctrl.abort(); }, 8000);
+    const res = await fetch(backendUrl() + '/api/account/update', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        token: acctState.token,
+        username: acctState.username,
+        avatar: acctState.avatar
+      }),
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    if (!res.ok) return;
+    await res.json();
+    refreshStatusDot('online');
+  } catch (e) {
+    refreshStatusDot('offline');
+  }
+}
+
+async function pingHealth() {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(function () { ctrl.abort(); }, 6000);
+    const res = await fetch(backendUrl() + '/api/health', { signal: ctrl.signal });
+    clearTimeout(t);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null;
+  }
+}
+
+function refreshStatusDot(forced) {
+  const dot = $('#acctStatusDot');
+  const text = $('#acctStatusText');
+  if (!dot) return;
+  const kind = (state && state.backendKind) || 'auto';
+  if (kind === 'local') {
+    dot.className = 'acct-dot local';
+    text.textContent = 'local';
+    return;
+  }
+  if (forced === 'online') {
+    dot.className = 'acct-dot online';
+    text.textContent = 'online';
+    return;
+  }
+  if (forced === 'offline') {
+    dot.className = 'acct-dot offline';
+    text.textContent = 'offline';
+    return;
+  }
+  pingHealth().then(function (h) {
+    if (h && h.ok) {
+      dot.className = 'acct-dot online';
+      text.textContent = 'online · ' + (h.storage || '?');
+    } else {
+      dot.className = 'acct-dot offline';
+      text.textContent = 'offline';
+    }
+  });
+}
+
+function renderAccountBar() {
+  $('#acctAvatar').textContent = acctState.avatar || '⚡';
+  if (document.activeElement !== $('#acctUsername')) {
+    $('#acctUsername').value = acctState.username || '';
+  }
+  $('#acctCode').textContent = acctState.friendCode || '— pending —';
+}
+
+function buildEmojiPicker() {
+  const grid = $('#acctEmojiGrid');
+  grid.innerHTML = '';
+  ACCOUNT_AVATARS.forEach(function (em) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = em;
+    if (em === acctState.avatar) b.classList.add('active');
+    b.addEventListener('click', function () {
+      acctState.avatar = em;
+      renderAccountBar();
+      saveProfileLocal();
+      pushProfileToBackend();
+      $('#acctEmojiPicker').hidden = true;
+    });
+    grid.appendChild(b);
+  });
+}
+
+function bindAccountBar() {
+  // Avatar click toggles the emoji picker.
+  $('#acctAvatar').addEventListener('click', function () {
+    const picker = $('#acctEmojiPicker');
+    const willShow = picker.hidden;
+    if (willShow) buildEmojiPicker();
+    picker.hidden = !willShow;
+  });
+
+  // Username editing — debounce backend push so live typing isn't a sync storm.
+  $('#acctUsername').addEventListener('input', function (e) {
+    acctState.username = (e.target.value || '').slice(0, 24);
+    saveProfileLocal();
+    clearTimeout(acctUsernameTimer);
+    acctUsernameTimer = setTimeout(pushProfileToBackend, 400);
+  });
+
+  // Friend code copy-to-clipboard.
+  $('#acctCode').addEventListener('click', function () {
+    const code = acctState.friendCode;
+    if (!code || code.indexOf('—') >= 0) return;
+    try { navigator.clipboard.writeText(code); } catch (e) { /* ignore */ }
+    const fb = $('#acctCopied');
+    fb.hidden = false;
+    setTimeout(function () { fb.hidden = true; }, 1500);
+  });
+
+  // Both "open stats" buttons.
+  const openStats = function () {
+    try { chrome.tabs.create({ url: chrome.runtime.getURL('stats.html') }); } catch (e) { /* ignore */ }
+  };
+  $('#acctStatsBtn').addEventListener('click', openStats);
+  $('#headerStatsBtn').addEventListener('click', openStats);
+
+  // Live update if the stats page (or another popup) changes the profile.
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener(function (changes, area) {
+      if (area !== 'local') return;
+      if (changes[STATS_KEY]) {
+        const newStats = changes[STATS_KEY].newValue || {};
+        const profile = newStats.profile || {};
+        if (document.activeElement !== $('#acctUsername')) {
+          acctState.username = profile.username || acctState.username;
+        }
+        acctState.avatar = profile.avatar || acctState.avatar;
+        renderAccountBar();
+      }
+      if (changes[ACCOUNT_KEY]) {
+        const newAcct = changes[ACCOUNT_KEY].newValue || {};
+        acctState.friendCode = newAcct.friendCode || acctState.friendCode;
+        acctState.token = newAcct.token || acctState.token;
+        renderAccountBar();
+      }
+    });
+  }
+}
+
 let state = mergeDefaults({});
 
 function mergeDefaults(s) {
@@ -639,5 +846,12 @@ document.addEventListener('DOMContentLoaded', function () {
     bindDirectionChips();
     pollFps();
     setInterval(pollFps, 1000);
+
+    // Account bar: load + render + bind, then ping health once for the status dot.
+    loadAccount(function () {
+      renderAccountBar();
+      bindAccountBar();
+      refreshStatusDot();
+    });
   });
 });

@@ -8,8 +8,30 @@
 <body>
   <header>
     <h1>⚡ PowerChrome</h1>
-    <span id="fps" class="fps" title="Frames per second (active tab)">— fps</span>
+    <div class="header-actions">
+      <button id="headerStatsBtn" class="header-stats" type="button" title="Open stats &amp; leaderboards">📊&nbsp;Stats</button>
+      <span id="fps" class="fps" title="Frames per second (active tab)">— fps</span>
+    </div>
   </header>
+
+  <section class="account-bar" aria-label="Account">
+    <button class="acct-avatar" id="acctAvatar" type="button" title="Change avatar">⚡</button>
+    <div class="acct-main">
+      <div class="acct-name-row">
+        <input type="text" id="acctUsername" placeholder="Your name" maxlength="24" autocomplete="off" spellcheck="false">
+        <span class="acct-status" id="acctStatus" title="Backend status"><span class="acct-dot" id="acctStatusDot"></span><span id="acctStatusText">local</span></span>
+      </div>
+      <div class="acct-code-row">
+        <button class="acct-code" id="acctCode" type="button" title="Click to copy">— pending —</button>
+        <span class="acct-copied" id="acctCopied" hidden>✓ copied</span>
+      </div>
+    </div>
+    <button id="acctStatsBtn" class="acct-stats" type="button" title="Open full stats &amp; leaderboards">📊</button>
+  </section>
+
+  <div class="emoji-picker" id="acctEmojiPicker" hidden>
+    <div class="emoji-picker-grid" id="acctEmojiGrid"></div>
+  </div>
 
   <nav class="tabs" role="tablist">
     <button data-tab="basics" class="active" role="tab" type="button">Basics</button>
