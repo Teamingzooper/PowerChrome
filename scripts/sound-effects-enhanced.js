@@ -18,13 +18,35 @@
   };
   const SCALE = [220.00, 246.94, 261.63, 293.66, 329.63, 349.23, 392.00];
 
-  function workletUrl() {
+  /* The bitcrush AudioWorklet processor as a self-contained source string.
+   * audioWorklet.addModule() rejects cross-origin URLs (e.g. a
+   * chrome-extension://... URL loaded from github.com), so we generate a
+   * same-origin Blob URL at runtime instead. The same source also lives at
+   * scripts/bitcrush-worklet.js for tooling / debugging.
+   */
+  const WORKLET_SOURCE = "class B extends AudioWorkletProcessor{static get parameterDescriptors(){return [{name:'amount',defaultValue:0.4,minValue:0,maxValue:1,automationRate:'k-rate'}]}constructor(){super();this._l=0;this._p=0}process(i,o,p){const a=i[0],b=o[0];if(!a||!a.length||!b||!b.length)return true;const amt=p.amount.length>0?p.amount[0]:0.4;const bits=Math.max(2,16-Math.floor(amt*14));const step=Math.pow(2,bits-1);const nf=0.15+(1-amt)*0.85;const ip=a[0];if(!ip)return true;const fr=ip.length;for(let c=0;c<b.length;c++){const op=b[c];if(!op)continue;let lt=this._l,ph=this._p;for(let k=0;k<fr;k++){ph+=nf;if(ph>=1){ph-=1;lt=Math.round(ip[k]*step)/step}op[k]=lt}if(c===0){this._l=lt;this._p=ph}}return true}}registerProcessor('powerchrome-bitcrush',B);";
+
+  let cachedBlobUrl = null;
+  function workletUrls() {
+    // Try Blob URL first (same-origin to the host page, works everywhere
+    // including pages whose CSP would block a chrome-extension:// script).
+    const urls = [];
+    try {
+      if (!cachedBlobUrl) {
+        const blob = new Blob([WORKLET_SOURCE], { type: 'application/javascript' });
+        cachedBlobUrl = URL.createObjectURL(blob);
+      }
+      if (cachedBlobUrl) urls.push(cachedBlobUrl);
+    } catch (e) { /* Blob unavailable for some reason */ }
+    // Fall back to the extension-served URL (works in popup / stats page
+    // where the document IS chrome-extension://, but typically not on the web).
     try {
       if (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getURL) {
-        return chrome.runtime.getURL('scripts/bitcrush-worklet.js');
+        urls.push(chrome.runtime.getURL('scripts/bitcrush-worklet.js'));
       }
     } catch (e) { /* not in extension context */ }
-    return 'scripts/bitcrush-worklet.js';
+    if (urls.length === 0) urls.push('scripts/bitcrush-worklet.js');
+    return urls;
   }
 
   function ensureCtx() {
@@ -69,16 +91,19 @@
     // ScriptProcessor + passthrough read the closure-level `bitcrushAmount` directly.
   }
 
-  function tryUpgradeToWorklet() {
+  async function tryUpgradeToWorklet() {
     if (workletReady || workletLoading) return;
     if (!ctx || !ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') {
-      // Worklet not supported — fall back to ScriptProcessor.
+      // Worklet not supported in this browser — fall back to ScriptProcessor.
       installScriptProcessorFallback();
       return;
     }
     workletLoading = true;
-    ctx.audioWorklet.addModule(workletUrl()).then(function () {
+    const urls = workletUrls();
+    let lastError = null;
+    for (let i = 0; i < urls.length; i++) {
       try {
+        await ctx.audioWorklet.addModule(urls[i]);
         const node = new AudioWorkletNode(ctx, 'powerchrome-bitcrush', {
           numberOfInputs: 1,
           numberOfOutputs: 1,
@@ -87,16 +112,17 @@
         workletReady = true;
         workletLoading = false;
         swapBitcrushNode(node, 'worklet');
+        return;
       } catch (e) {
-        console.warn('[PowerChrome] AudioWorkletNode construct failed, falling back', e);
-        workletLoading = false;
-        installScriptProcessorFallback();
+        lastError = e;
+        // Try the next URL — typical case: chrome-extension:// blocked by
+        // host CSP after the Blob URL succeeded, or vice versa.
       }
-    }).catch(function (e) {
-      console.warn('[PowerChrome] AudioWorklet module load failed, falling back', e);
-      workletLoading = false;
-      installScriptProcessorFallback();
-    });
+    }
+    // Every worklet URL failed → ScriptProcessor as a last resort.
+    if (lastError) console.warn('[PowerChrome] AudioWorklet unavailable, falling back to ScriptProcessor', lastError);
+    workletLoading = false;
+    installScriptProcessorFallback();
   }
 
   function installScriptProcessorFallback() {
