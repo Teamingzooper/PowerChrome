@@ -6,6 +6,28 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <!-- First-run onboarding. Shown when no friendCode exists yet. The Get
+       started button creates the cloud account explicitly so it feels like a
+       deliberate setup rather than silent magic. -->
+  <section class="onboarding" id="onboarding" hidden>
+    <div class="onb-header">
+      <span class="onb-logo">⚡</span>
+      <div>
+        <h2 class="onb-title">Welcome to PowerChrome</h2>
+        <p class="onb-sub">Pick a name and avatar — they'll show up on your stats page and any leaderboards.</p>
+      </div>
+    </div>
+    <label class="onb-label" for="onbUsername">Username</label>
+    <input class="onb-input" type="text" id="onbUsername" maxlength="24" placeholder="e.g. mark" autocomplete="off" spellcheck="false">
+    <label class="onb-label">Avatar</label>
+    <div class="onb-emoji-grid" id="onbEmojiGrid"></div>
+    <div class="onb-actions">
+      <button id="onbSubmit" type="button" class="onb-submit">Get started →</button>
+      <span class="onb-status" id="onbStatus" hidden></span>
+    </div>
+    <p class="onb-fine">You'll get a unique 8-character friend code. Stats stay local until you opt into sharing.</p>
+  </section>
+
   <header>
     <h1>⚡ PowerChrome</h1>
     <div class="header-actions">

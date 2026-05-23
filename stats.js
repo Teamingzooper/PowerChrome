@@ -693,20 +693,33 @@
       if (window.__powerMode && window.__powerMode.stats) {
         window.__powerMode.stats._setStats(currentStats);
       }
+
+      // Render IMMEDIATELY from local data — never block the page on a remote
+      // ping. The previous build awaited social.init() (up to a 12 s health
+      // timeout) before the first paint, which made stats look empty even
+      // when chrome.storage had the data.
+      renderAll();
+      bind();
+      diagInterval = setInterval(renderDiagnostics, 5000);
+
+      // Re-check achievements against current snapshot (catches retroactive
+      // unlocks if the user typed before the catalog existed).
+      if (window.__powerMode.achievements && window.__powerMode.achievements.checkAll) {
+        window.__powerMode.achievements.checkAll();
+        renderAchievements();
+      }
+
+      // Now kick off social init in the background. When it finishes (success
+      // or failure), re-render the social bits so friend list / leaderboard /
+      // feed / banner reflect remote state.
       ensureSocialLoaded(function () {
-        renderAll();
-        bind();
-        diagInterval = setInterval(renderDiagnostics, 5000);
+        renderBackendBanner();
+        renderMyCode();
+        renderFriendList();
+        renderLeaderboard();
+        renderActivityFeed();
+        renderDiagnostics();
 
-        // Re-check achievements against current snapshot (catches retroactive
-        // unlocks if the user typed before the catalog existed).
-        if (window.__powerMode.achievements && window.__powerMode.achievements.checkAll) {
-          window.__powerMode.achievements.checkAll();
-          renderAchievements();
-        }
-
-        // Re-render any time the remote backend gets fresh data or its
-        // connectivity flips on/off.
         if (window.__powerMode.social && window.__powerMode.social.onRemoteChange) {
           window.__powerMode.social.onRemoteChange(function () {
             renderBackendBanner();
@@ -718,6 +731,13 @@
           });
         }
       });
+
+      // Live update when local stats change (content script wrote new counters,
+      // popup edited the profile, achievement unlocked, etc.).
+      if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+        // (The chrome.storage.onChanged listener inside bind() already handles
+        //  stats + social keys.)
+      }
     });
   });
 })();

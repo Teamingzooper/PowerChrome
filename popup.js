@@ -236,6 +236,127 @@ function buildEmojiPicker() {
   });
 }
 
+/* ---------------- Onboarding ---------------- *
+ * Shown only on first install (no friendCode cached locally). Submit
+ * creates the cloud account explicitly with the user-picked username +
+ * avatar, then hides the modal so all subsequent opens jump straight to
+ * the account bar.
+ */
+let onbSelectedAvatar = '⚡';
+
+function isOnboardingNeeded() {
+  return !acctState.friendCode;
+}
+
+function buildOnboardingPicker() {
+  const grid = document.getElementById('onbEmojiGrid');
+  grid.innerHTML = '';
+  ACCOUNT_AVATARS.forEach(function (em) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = em;
+    if (em === onbSelectedAvatar) b.classList.add('active');
+    b.addEventListener('click', function () {
+      onbSelectedAvatar = em;
+      grid.querySelectorAll('button').forEach(function (x) { x.classList.toggle('active', x === b); });
+    });
+    grid.appendChild(b);
+  });
+}
+
+function showOnboarding() {
+  document.body.classList.add('onb-active');
+  document.getElementById('onboarding').hidden = false;
+  buildOnboardingPicker();
+  setTimeout(function () { document.getElementById('onbUsername').focus(); }, 50);
+}
+
+function hideOnboarding() {
+  document.body.classList.remove('onb-active');
+  document.getElementById('onboarding').hidden = true;
+}
+
+function setOnbStatus(msg, kind) {
+  const el = document.getElementById('onbStatus');
+  if (!msg) { el.hidden = true; return; }
+  el.textContent = msg;
+  el.className = 'onb-status' + (kind ? ' ' + kind : '');
+  el.hidden = false;
+}
+
+async function submitOnboarding() {
+  const nameRaw = document.getElementById('onbUsername').value || '';
+  const username = nameRaw.trim().slice(0, 24);
+  if (!username) {
+    setOnbStatus('Pick a username first.', 'error');
+    document.getElementById('onbUsername').focus();
+    return;
+  }
+  const submitBtn = document.getElementById('onbSubmit');
+  submitBtn.disabled = true;
+  setOnbStatus('Creating account…');
+
+  // Always cache locally first so the bar shows the right thing even if the
+  // network call fails. We'll create the cloud account in the background
+  // and the auto-recover path picks up later if it fails now.
+  acctState.username = username;
+  acctState.avatar = onbSelectedAvatar;
+  saveProfileLocal();
+
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(function () { ctrl.abort(); }, 10000);
+    const res = await fetch(backendUrl() + '/api/account/init', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: username, avatar: onbSelectedAvatar }),
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    if (!res.ok) throw new Error('http ' + res.status);
+    const data = await res.json();
+    if (!data || !data.ok) throw new Error(data && data.error || 'failed');
+
+    acctState.friendCode = data.friendCode;
+    acctState.token = data.token;
+    chrome.storage.local.set({
+      [ACCOUNT_KEY]: {
+        friendCode: data.friendCode,
+        token: data.token,
+        createdAt: new Date().toISOString()
+      }
+    });
+    setOnbStatus('Saved ✓', 'ok');
+    setTimeout(function () {
+      hideOnboarding();
+      renderAccountBar();
+      refreshStatusDot('online');
+    }, 500);
+  } catch (e) {
+    // Even if the cloud account fails, the local profile is saved. The next
+    // typing session in any tab will retry account creation via the content
+    // script's social-api init flow.
+    setOnbStatus('Saved locally (cloud sync will retry)', 'ok');
+    setTimeout(function () {
+      hideOnboarding();
+      renderAccountBar();
+      refreshStatusDot('offline');
+    }, 800);
+  } finally {
+    submitBtn.disabled = false;
+  }
+}
+
+function bindOnboarding() {
+  document.getElementById('onbSubmit').addEventListener('click', submitOnboarding);
+  document.getElementById('onbUsername').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitOnboarding();
+    }
+  });
+}
+
 function bindAccountBar() {
   // Avatar click toggles the emoji picker.
   $('#acctAvatar').addEventListener('click', function () {
@@ -848,10 +969,17 @@ document.addEventListener('DOMContentLoaded', function () {
     setInterval(pollFps, 1000);
 
     // Account bar: load + render + bind, then ping health once for the status dot.
+    // If this is a fresh install (no friend code yet), show the onboarding
+    // modal first — it covers the rest of the popup until the user submits.
     loadAccount(function () {
       renderAccountBar();
       bindAccountBar();
-      refreshStatusDot();
+      bindOnboarding();
+      if (isOnboardingNeeded()) {
+        showOnboarding();
+      } else {
+        refreshStatusDot();
+      }
     });
   });
 });
