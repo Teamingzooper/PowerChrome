@@ -386,6 +386,7 @@
     $('#backendDot').classList.toggle('ok', dotOK);
 
     let label, sub;
+    let showRetry = false;
     if (!isRemote) {
       label = 'Local-only mode';
       sub = 'The social system is fully wired but stays on this device. Friend codes, leaderboards, and accounts are stored in <code>chrome.storage.local</code>. Switch to remote in the popup to share with friends.';
@@ -397,10 +398,41 @@
               : 'Your friend code, friends list, and stats sync automatically every 15 seconds.');
     } else {
       label = 'Remote backend unreachable';
-      sub = 'Trying <code>' + (status.serverUrl || '') + '</code> — no response. Falling back to local-only mode. Check the URL in the popup or try again later.';
+      sub = 'Auto-retrying every few seconds. If this persists, your network or an ad-blocker may be blocking <code>*.vercel.app</code>.';
+      showRetry = true;
     }
     $('#backendLabel').textContent = label;
     $('#backendSub').innerHTML = sub;
+
+    // Mount or unmount the retry button as state changes.
+    let btn = document.getElementById('backendRetryBtn');
+    if (showRetry && !btn) {
+      btn = document.createElement('button');
+      btn.id = 'backendRetryBtn';
+      btn.type = 'button';
+      btn.className = 'small';
+      btn.textContent = 'Retry now';
+      btn.style.cssText = 'margin-top:8px';
+      btn.addEventListener('click', async function () {
+        const social = window.__powerMode && window.__powerMode.social;
+        if (!social || !social.remoteBackend || !social.remoteBackend.forceRetry) return;
+        btn.disabled = true;
+        btn.textContent = 'Retrying…';
+        try {
+          await social.remoteBackend.forceRetry();
+        } catch (e) { /* ignore */ }
+        // The remote-change listener (registered in bind()) will re-render
+        // the banner with the new state, which also rebuilds this button.
+        if (btn.parentNode) {
+          btn.disabled = false;
+          btn.textContent = 'Retry now';
+        }
+      });
+      const banner = document.getElementById('backendBanner');
+      if (banner) banner.appendChild(btn);
+    } else if (!showRetry && btn) {
+      btn.remove();
+    }
   }
 
   function renderMyCode() {

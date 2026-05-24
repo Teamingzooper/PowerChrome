@@ -287,10 +287,22 @@
    * mock backend for the remainder of the session so the UI never deadlocks
    * on an unreachable server.
    */
+  // Vercel hands out a short alias (powerchrome-api.vercel.app) plus team-scoped
+  // aliases. The short alias occasionally has TLS routing problems on certain
+  // ISP edges; the team-scoped alias is more reliable but uglier. Try the short
+  // one first (it's the canonical user-visible URL), fall back to the team
+  // alias if we can't reach it. The first successful URL is sticky — we don't
+  // re-probe on every call.
   const DEFAULT_BACKEND_URL = 'https://powerchrome-api.vercel.app';
+  const BACKEND_FALLBACKS = [
+    'https://powerchrome-api.vercel.app',
+    'https://powerchrome-api-teamingzoopers-projects.vercel.app',
+    'https://powerchrome-api-teamingzooper-teamingzoopers-projects.vercel.app'
+  ];
   const REMOTE_CACHE = { friends: [], leaderboards: {}, status: { backend: 'remote', online: false } };
   let remoteAccount = null;
   let remoteUrl = '';
+  let stickyBackendUrl = ''; // last URL that actually worked
   let remoteFailureCount = 0;
   let remoteListeners = [];
 
@@ -323,11 +335,23 @@
     if (remoteUrl) return remoteUrl;
     const s = window.__powerMode.main && window.__powerMode.main.getSettings();
     if (s && s.backendUrl) return s.backendUrl;
+    if (stickyBackendUrl) return stickyBackendUrl;
     return DEFAULT_BACKEND_URL;
+  }
+
+  function backendCandidates() {
+    // If the user has set an explicit backendUrl in popup, ONLY use that.
+    const s = window.__powerMode.main && window.__powerMode.main.getSettings();
+    if (s && s.backendUrl) return [s.backendUrl];
+    if (stickyBackendUrl) return [stickyBackendUrl].concat(BACKEND_FALLBACKS.filter(function (u) { return u !== stickyBackendUrl; }));
+    return BACKEND_FALLBACKS.slice();
   }
 
   function apiUrl(path) {
     return getRemoteUrl().replace(/\/$/, '') + path;
+  }
+  function apiUrlAt(base, path) {
+    return base.replace(/\/$/, '') + path;
   }
 
   async function apiPost(path, body, opts) {
@@ -382,20 +406,39 @@
     }
   }
 
-  async function apiHealth() {
+  async function fetchWithTimeout(url, opts, ms) {
     const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    // Generous timeout — Vercel's first-cold-start can comfortably take 5–7 s
-    // and we don't want to flap the banner to "offline" because of it.
-    const timeout = setTimeout(function () { if (ctrl) ctrl.abort(); }, 12000);
+    const timeout = setTimeout(function () { if (ctrl) ctrl.abort(); }, ms || 12000);
     try {
-      const res = await fetch(apiUrl('/api/health'), { signal: ctrl ? ctrl.signal : undefined });
+      const res = await fetch(url, Object.assign({}, opts || {}, { signal: ctrl ? ctrl.signal : undefined }));
       clearTimeout(timeout);
-      if (!res.ok) return null;
-      return await res.json();
+      return res;
     } catch (e) {
       clearTimeout(timeout);
-      return null;
+      throw e;
     }
+  }
+
+  async function apiHealth() {
+    // Walk candidate backend URLs and pin the first one that answers. Many
+    // users only hit the first; this helps the minority on networks where
+    // the short alias has a flaky TLS edge.
+    const candidates = backendCandidates();
+    let lastErr = null;
+    for (let i = 0; i < candidates.length; i++) {
+      const base = candidates[i];
+      try {
+        const res = await fetchWithTimeout(apiUrlAt(base, '/api/health'), {}, 12000);
+        if (res.ok) {
+          stickyBackendUrl = base;
+          return await res.json();
+        }
+        lastErr = new Error('http ' + res.status);
+      } catch (e) {
+        lastErr = e;
+      }
+    }
+    return null;
   }
 
   async function ensureRemoteAccount() {
@@ -751,6 +794,7 @@
     pullSettings: pullSettings,
     fetchPublicProfile: fetchPublicProfile,
     updateProfile: updateProfileOnRemote,
+    forceRetry: forceRetry,
     onChange: function (fn) { remoteListeners.push(fn); return function () { remoteListeners = remoteListeners.filter(function (x) { return x !== fn; }); }; }
   };
 
@@ -802,17 +846,22 @@
         await REMOTE_BACKEND.syncStats();
       } catch (e) { /* swallow */ }
     }, 15000);
-    // Heartbeat: if we're currently offline, retry the health check every 30 s
-    // so a transient cold-start or network blip self-heals without a reload.
+    // Heartbeat: if we're currently offline, retry quickly at first and back
+    // off so a transient cold-start or network blip self-heals fast.
+    let healAttempts = 0;
     healTimer = setInterval(async function () {
       const s = window.__powerMode.main && window.__powerMode.main.getSettings();
       const kind = s ? s.backendKind : 'auto';
-      if (kind === 'local') return;
-      if (REMOTE_CACHE.status.online) return;
+      if (kind === 'local') { healAttempts = 0; return; }
+      if (REMOTE_CACHE.status.online) { healAttempts = 0; return; }
+      // Skip 4 of 5 ticks once we've been offline for a while (5s × 5 = 25s
+      // effective cadence). First minute: every 5 s.
+      healAttempts++;
+      if (healAttempts > 12 && (healAttempts % 5) !== 0) return;
       try {
         const h = await pingRemote();
         if (h && h.ok) {
-          // Healed — pull fresh data so the UI updates.
+          healAttempts = 0;
           try { await ensureRemoteAccount(); } catch (e) { /* ignore */ }
           await Promise.all([
             refreshRemoteFriends(),
@@ -822,7 +871,26 @@
           ]);
         }
       } catch (e) { /* swallow */ }
-    }, 30000);
+    }, 5000);
+  }
+
+  /* Manual retry — called from the stats page's "Retry now" button. */
+  async function forceRetry() {
+    stickyBackendUrl = ''; // clear sticky so we re-probe every candidate
+    REMOTE_CACHE.status.online = false;
+    notifyRemote();
+    const h = await pingRemote();
+    if (h && h.ok) {
+      try { await ensureRemoteAccount(); } catch (e) { /* ignore */ }
+      await Promise.all([
+        refreshRemoteFriends(),
+        refreshRemoteLeaderboard('combo', 'friends'),
+        refreshRemoteLeaderboard('combo', 'global'),
+        refreshActivityFeed()
+      ]);
+      return { ok: true };
+    }
+    return { ok: false };
   }
 
   /* ---------- Public surface ---------- */
