@@ -662,15 +662,29 @@
         if (changes[STATS_KEY]) {
           const newVal = changes[STATS_KEY].newValue;
           if (newVal) {
+            // Mutate currentStats in PLACE so the shared reference held by
+            // window.__powerMode.stats stays valid. Reassigning here used to
+            // strand stats-tracker on a stale snapshot, which it then wrote
+            // back to storage every 5 s — causing visible flicker as the
+            // live data and the stale data fought over chrome.storage.
             const localProfile = currentStats.profile;
-            currentStats = Object.assign(defaultStats(), newVal);
+            const merged = Object.assign(defaultStats(), newVal);
+            Object.keys(currentStats).forEach(function (k) { delete currentStats[k]; });
+            Object.assign(currentStats, merged);
             if (localProfile && (localProfile.username || (localProfile.avatar && localProfile.avatar !== '⚡'))) {
               currentStats.profile = Object.assign({}, currentStats.profile, localProfile);
             }
+            // Re-prime the tracker just in case the previous _setStats happened
+            // on a different (long-replaced) object identity.
+            if (window.__powerMode && window.__powerMode.stats) {
+              window.__powerMode.stats._setStats(currentStats);
+            }
             renderHero();
             renderChart();
+            renderHourChart();
             renderSites();
             renderMilestones();
+            renderAchievements();
             renderLeaderboard();
           }
         }

@@ -287,9 +287,17 @@
     maybeSave(true);
   }
 
-  // Periodic flush
+  // Periodic flush. Pass force=false so this ONLY writes when something
+  // actually dirtied the in-memory snapshot. The previous force=true was
+  // stomping the stats page's freshly-loaded state every 5 s because the
+  // stats page never mutates stats locally, so any reassignment of
+  // currentStats from the storage listener left this module holding a
+  // stale reference that then got force-written back to storage.
   if (typeof window !== 'undefined') {
-    setInterval(function () { maybeSave(true); }, 5000);
+    setInterval(function () { maybeSave(false); }, 5000);
+    // beforeunload still force-flushes so the last few keystrokes don't get
+    // lost on tab close. Stats-page beforeunload writes the current data
+    // (which is already what storage has), so no harm there either.
     window.addEventListener('beforeunload', function () { maybeSave(true); });
   }
 
